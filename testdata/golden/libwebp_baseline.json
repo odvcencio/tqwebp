@@ -1,0 +1,258 @@
+{
+  "corpus_sha256": "40f40c1173003666e7890be3185e311449da17f0534200d1ce052c0a155e0b37",
+  "measure": {
+    "display_y_psnr_db": "luma PSNR after libwebp's own decode, with the luma of Go's image/color",
+    "formula": "Y = (19595*R + 38470*G + 7471*B + 32768) >> 16"
+  },
+  "points": {
+    "edge_prime_dims": [
+      {
+        "bytes": 2688,
+        "display_y_psnr_db": 45.3696,
+        "quality": 50
+      },
+      {
+        "bytes": 3140,
+        "display_y_psnr_db": 47.64,
+        "quality": 75
+      },
+      {
+        "bytes": 3844,
+        "display_y_psnr_db": 51.7463,
+        "quality": 85
+      },
+      {
+        "bytes": 4470,
+        "display_y_psnr_db": 54.3173,
+        "quality": 90
+      },
+      {
+        "bytes": 5408,
+        "display_y_psnr_db": 57.4395,
+        "quality": 95
+      }
+    ],
+    "edge_small_64": [
+      {
+        "bytes": 362,
+        "display_y_psnr_db": 34.7871,
+        "quality": 50
+      },
+      {
+        "bytes": 514,
+        "display_y_psnr_db": 36.1054,
+        "quality": 75
+      },
+      {
+        "bytes": 862,
+        "display_y_psnr_db": 38.8907,
+        "quality": 85
+      },
+      {
+        "bytes": 1154,
+        "display_y_psnr_db": 41.3712,
+        "quality": 90
+      },
+      {
+        "bytes": 1612,
+        "display_y_psnr_db": 45.3463,
+        "quality": 95
+      }
+    ],
+    "flatart_logo_blocks": [
+      {
+        "bytes": 1328,
+        "display_y_psnr_db": 50.2638,
+        "quality": 50
+      },
+      {
+        "bytes": 1342,
+        "display_y_psnr_db": 51.2352,
+        "quality": 75
+      },
+      {
+        "bytes": 1352,
+        "display_y_psnr_db": 53.836,
+        "quality": 85
+      },
+      {
+        "bytes": 1424,
+        "display_y_psnr_db": 53.4025,
+        "quality": 90
+      },
+      {
+        "bytes": 1698,
+        "display_y_psnr_db": 53.833,
+        "quality": 95
+      }
+    ],
+    "flatart_quadrant": [
+      {
+        "bytes": 2620,
+        "display_y_psnr_db": 58.0508,
+        "quality": 50
+      },
+      {
+        "bytes": 2378,
+        "display_y_psnr_db": 60.2235,
+        "quality": 75
+      },
+      {
+        "bytes": 2440,
+        "display_y_psnr_db": 61.9302,
+        "quality": 85
+      },
+      {
+        "bytes": 2644,
+        "display_y_psnr_db": 61.1771,
+        "quality": 90
+      },
+      {
+        "bytes": 2742,
+        "display_y_psnr_db": 61.6711,
+        "quality": 95
+      }
+    ],
+    "photo_gradient_wide": [
+      {
+        "bytes": 6770,
+        "display_y_psnr_db": 37.1036,
+        "quality": 50
+      },
+      {
+        "bytes": 17668,
+        "display_y_psnr_db": 37.2846,
+        "quality": 75
+      },
+      {
+        "bytes": 89180,
+        "display_y_psnr_db": 39.0674,
+        "quality": 85
+      },
+      {
+        "bytes": 160114,
+        "display_y_psnr_db": 41.7404,
+        "quality": 90
+      },
+      {
+        "bytes": 241540,
+        "display_y_psnr_db": 45.4028,
+        "quality": 95
+      }
+    ],
+    "photo_noise_detail": [
+      {
+        "bytes": 7654,
+        "display_y_psnr_db": 37.0971,
+        "quality": 50
+      },
+      {
+        "bytes": 21232,
+        "display_y_psnr_db": 37.2909,
+        "quality": 75
+      },
+      {
+        "bytes": 90540,
+        "display_y_psnr_db": 38.9179,
+        "quality": 85
+      },
+      {
+        "bytes": 168104,
+        "display_y_psnr_db": 41.674,
+        "quality": 90
+      },
+      {
+        "bytes": 256788,
+        "display_y_psnr_db": 45.3482,
+        "quality": 95
+      }
+    ],
+    "photo_texture_detail": [
+      {
+        "bytes": 7658,
+        "display_y_psnr_db": 37.099,
+        "quality": 50
+      },
+      {
+        "bytes": 20978,
+        "display_y_psnr_db": 37.4147,
+        "quality": 75
+      },
+      {
+        "bytes": 74976,
+        "display_y_psnr_db": 39.0313,
+        "quality": 85
+      },
+      {
+        "bytes": 129968,
+        "display_y_psnr_db": 41.5085,
+        "quality": 90
+      },
+      {
+        "bytes": 202924,
+        "display_y_psnr_db": 45.4058,
+        "quality": 95
+      }
+    ],
+    "screenshot_dashboard": [
+      {
+        "bytes": 4052,
+        "display_y_psnr_db": 50.0925,
+        "quality": 50
+      },
+      {
+        "bytes": 4334,
+        "display_y_psnr_db": 52.6617,
+        "quality": 75
+      },
+      {
+        "bytes": 4908,
+        "display_y_psnr_db": 55.6131,
+        "quality": 85
+      },
+      {
+        "bytes": 5414,
+        "display_y_psnr_db": 56.9751,
+        "quality": 90
+      },
+      {
+        "bytes": 6676,
+        "display_y_psnr_db": 58.141,
+        "quality": 95
+      }
+    ],
+    "screenshot_panel_grid": [
+      {
+        "bytes": 6216,
+        "display_y_psnr_db": 46.7556,
+        "quality": 50
+      },
+      {
+        "bytes": 7120,
+        "display_y_psnr_db": 49.2625,
+        "quality": 75
+      },
+      {
+        "bytes": 8732,
+        "display_y_psnr_db": 51.9727,
+        "quality": 85
+      },
+      {
+        "bytes": 10342,
+        "display_y_psnr_db": 53.4922,
+        "quality": 90
+      },
+      {
+        "bytes": 12616,
+        "display_y_psnr_db": 54.643,
+        "quality": 95
+      }
+    ]
+  },
+  "producer": {
+    "library": "libwebp",
+    "reached_through": "Pillow 11.3.0",
+    "settings": "quality sweep at method 4, lossless off",
+    "version": "1.5.0"
+  }
+}

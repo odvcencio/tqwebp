@@ -1,4 +1,11 @@
-package webp
+// Package encoder holds the VP8 key-frame encoding pipeline: colour
+// conversion, prediction, transforms, quantization, reconstruction, and
+// serialization. The module root wraps it in the public interface.
+//
+// The package sits behind internal/ for one reason: the repository's own
+// gate harness needs the encoder's reconstruction, and the exact-match
+// gate would otherwise force that hook into the supported interface.
+package encoder
 
 import (
 	"image"
@@ -54,13 +61,13 @@ type macroblock struct {
 
 // encoder holds one frame's state.
 type encoder struct {
-	opts Options
-	src  *yuv.Planes
-	rec  *yuv.Planes
-	q    quantize.Quantizer
-	mbw  int
-	mbh  int
-	mbs  []macroblock
+	cfg Config
+	src *yuv.Planes
+	rec *yuv.Planes
+	q   quantize.Quantizer
+	mbw int
+	mbh int
+	mbs []macroblock
 
 	// filterLevel is the loop filter strength the frame header signals.
 	// It stays at 0 in this release: the encoder does not model the
@@ -89,15 +96,15 @@ type neighborBuf struct {
 	nb   predict.Neighbors
 }
 
-func newEncoder(src *yuv.Planes, opts Options) *encoder {
+func newEncoder(src *yuv.Planes, cfg Config) *encoder {
 	return &encoder{
-		opts: opts,
-		src:  src,
-		rec:  yuv.NewPlanes(src.Width, src.Height),
-		q:    quantize.New(quantize.IndexForQuality(opts.Quality)),
-		mbw:  src.MBW,
-		mbh:  src.MBH,
-		mbs:  make([]macroblock, src.MBW*src.MBH),
+		cfg: cfg,
+		src: src,
+		rec: yuv.NewPlanes(src.Width, src.Height),
+		q:   quantize.New(quantize.IndexForQuality(cfg.Quality)),
+		mbw: src.MBW,
+		mbh: src.MBH,
+		mbs: make([]macroblock, src.MBW*src.MBH),
 	}
 }
 

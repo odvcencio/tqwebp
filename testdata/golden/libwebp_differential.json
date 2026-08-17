@@ -1,0 +1,522 @@
+{
+  "finding": {
+    "byte_mismatches": 0,
+    "files_decoded_by_libwebp": 63,
+    "median_difference_db": 0.0324,
+    "reading": "Every file tqwebp writes decodes in libwebp, which is the browser decoder. On the photo class the two measurements agree to 0.0000 dB, which pins the colour convention end to end. On flat art and screenshots libwebp reports up to 1.32 dB more, because libwebp upsamples chroma with a bilinear filter and golang.org/x/image repeats each chroma sample. The oracle therefore reads slightly low on hard colour edges, never high, so every gate number in this repository is conservative.",
+    "worst_difference_db": 1.3164,
+    "worst_photo_difference_db": 0.0004
+  },
+  "points": [
+    {
+      "bytes": 2492,
+      "difference_db": 0.0152,
+      "image": "edge_prime_dims",
+      "libwebp_decoded_y_psnr_db": 40.7859,
+      "oracle_y_psnr_db": 40.7707,
+      "quality": 10
+    },
+    {
+      "bytes": 3590,
+      "difference_db": 0.0324,
+      "image": "edge_prime_dims",
+      "libwebp_decoded_y_psnr_db": 45.5781,
+      "oracle_y_psnr_db": 45.5457,
+      "quality": 25
+    },
+    {
+      "bytes": 4956,
+      "difference_db": 0.0126,
+      "image": "edge_prime_dims",
+      "libwebp_decoded_y_psnr_db": 47.7673,
+      "oracle_y_psnr_db": 47.7547,
+      "quality": 50
+    },
+    {
+      "bytes": 5592,
+      "difference_db": 0.0986,
+      "image": "edge_prime_dims",
+      "libwebp_decoded_y_psnr_db": 48.7517,
+      "oracle_y_psnr_db": 48.6531,
+      "quality": 75
+    },
+    {
+      "bytes": 7182,
+      "difference_db": 0.1018,
+      "image": "edge_prime_dims",
+      "libwebp_decoded_y_psnr_db": 52.9712,
+      "oracle_y_psnr_db": 52.8694,
+      "quality": 85
+    },
+    {
+      "bytes": 9354,
+      "difference_db": 0.275,
+      "image": "edge_prime_dims",
+      "libwebp_decoded_y_psnr_db": 55.3208,
+      "oracle_y_psnr_db": 55.0458,
+      "quality": 90
+    },
+    {
+      "bytes": 11636,
+      "difference_db": 0.3772,
+      "image": "edge_prime_dims",
+      "libwebp_decoded_y_psnr_db": 57.3945,
+      "oracle_y_psnr_db": 57.0173,
+      "quality": 95
+    },
+    {
+      "bytes": 224,
+      "difference_db": 0.0125,
+      "image": "edge_small_64",
+      "libwebp_decoded_y_psnr_db": 31.2118,
+      "oracle_y_psnr_db": 31.1993,
+      "quality": 10
+    },
+    {
+      "bytes": 356,
+      "difference_db": 0.0046,
+      "image": "edge_small_64",
+      "libwebp_decoded_y_psnr_db": 33.5683,
+      "oracle_y_psnr_db": 33.5637,
+      "quality": 25
+    },
+    {
+      "bytes": 524,
+      "difference_db": 0.0001,
+      "image": "edge_small_64",
+      "libwebp_decoded_y_psnr_db": 35.3432,
+      "oracle_y_psnr_db": 35.3431,
+      "quality": 50
+    },
+    {
+      "bytes": 620,
+      "difference_db": 0.0023,
+      "image": "edge_small_64",
+      "libwebp_decoded_y_psnr_db": 35.9625,
+      "oracle_y_psnr_db": 35.9648,
+      "quality": 75
+    },
+    {
+      "bytes": 1084,
+      "difference_db": 0.0124,
+      "image": "edge_small_64",
+      "libwebp_decoded_y_psnr_db": 38.4993,
+      "oracle_y_psnr_db": 38.5117,
+      "quality": 85
+    },
+    {
+      "bytes": 1780,
+      "difference_db": 0.0107,
+      "image": "edge_small_64",
+      "libwebp_decoded_y_psnr_db": 41.8467,
+      "oracle_y_psnr_db": 41.836,
+      "quality": 90
+    },
+    {
+      "bytes": 2494,
+      "difference_db": 0.0381,
+      "image": "edge_small_64",
+      "libwebp_decoded_y_psnr_db": 45.007,
+      "oracle_y_psnr_db": 44.9689,
+      "quality": 95
+    },
+    {
+      "bytes": 964,
+      "difference_db": 0.4351,
+      "image": "flatart_logo_blocks",
+      "libwebp_decoded_y_psnr_db": 44.9196,
+      "oracle_y_psnr_db": 44.4845,
+      "quality": 10
+    },
+    {
+      "bytes": 1134,
+      "difference_db": 1.0103,
+      "image": "flatart_logo_blocks",
+      "libwebp_decoded_y_psnr_db": 50.0254,
+      "oracle_y_psnr_db": 49.0151,
+      "quality": 25
+    },
+    {
+      "bytes": 1308,
+      "difference_db": 0.7816,
+      "image": "flatart_logo_blocks",
+      "libwebp_decoded_y_psnr_db": 52.1292,
+      "oracle_y_psnr_db": 51.3476,
+      "quality": 50
+    },
+    {
+      "bytes": 1378,
+      "difference_db": 0.7674,
+      "image": "flatart_logo_blocks",
+      "libwebp_decoded_y_psnr_db": 51.644,
+      "oracle_y_psnr_db": 50.8766,
+      "quality": 75
+    },
+    {
+      "bytes": 1572,
+      "difference_db": 1.3164,
+      "image": "flatart_logo_blocks",
+      "libwebp_decoded_y_psnr_db": 52.2562,
+      "oracle_y_psnr_db": 50.9398,
+      "quality": 85
+    },
+    {
+      "bytes": 1856,
+      "difference_db": 1.2613,
+      "image": "flatart_logo_blocks",
+      "libwebp_decoded_y_psnr_db": 52.6228,
+      "oracle_y_psnr_db": 51.3615,
+      "quality": 90
+    },
+    {
+      "bytes": 2038,
+      "difference_db": 1.2432,
+      "image": "flatart_logo_blocks",
+      "libwebp_decoded_y_psnr_db": 52.9004,
+      "oracle_y_psnr_db": 51.6572,
+      "quality": 95
+    },
+    {
+      "bytes": 1948,
+      "difference_db": 0.1139,
+      "image": "flatart_quadrant",
+      "libwebp_decoded_y_psnr_db": 47.7631,
+      "oracle_y_psnr_db": 47.877,
+      "quality": 10
+    },
+    {
+      "bytes": 2070,
+      "difference_db": 0.283,
+      "image": "flatart_quadrant",
+      "libwebp_decoded_y_psnr_db": 55.0121,
+      "oracle_y_psnr_db": 54.7291,
+      "quality": 25
+    },
+    {
+      "bytes": 2192,
+      "difference_db": 0.1159,
+      "image": "flatart_quadrant",
+      "libwebp_decoded_y_psnr_db": 55.7992,
+      "oracle_y_psnr_db": 55.6833,
+      "quality": 50
+    },
+    {
+      "bytes": 2220,
+      "difference_db": 0.2011,
+      "image": "flatart_quadrant",
+      "libwebp_decoded_y_psnr_db": 55.3837,
+      "oracle_y_psnr_db": 55.1826,
+      "quality": 75
+    },
+    {
+      "bytes": 2362,
+      "difference_db": 0.6835,
+      "image": "flatart_quadrant",
+      "libwebp_decoded_y_psnr_db": 61.0234,
+      "oracle_y_psnr_db": 60.3399,
+      "quality": 85
+    },
+    {
+      "bytes": 2522,
+      "difference_db": 0.1324,
+      "image": "flatart_quadrant",
+      "libwebp_decoded_y_psnr_db": 52.904,
+      "oracle_y_psnr_db": 52.7716,
+      "quality": 90
+    },
+    {
+      "bytes": 2732,
+      "difference_db": 0.0566,
+      "image": "flatart_quadrant",
+      "libwebp_decoded_y_psnr_db": 52.9749,
+      "oracle_y_psnr_db": 52.9183,
+      "quality": 95
+    },
+    {
+      "bytes": 4054,
+      "difference_db": 0.0004,
+      "image": "photo_gradient_wide",
+      "libwebp_decoded_y_psnr_db": 36.5408,
+      "oracle_y_psnr_db": 36.5412,
+      "quality": 10
+    },
+    {
+      "bytes": 5828,
+      "difference_db": 0.0001,
+      "image": "photo_gradient_wide",
+      "libwebp_decoded_y_psnr_db": 36.9441,
+      "oracle_y_psnr_db": 36.9442,
+      "quality": 25
+    },
+    {
+      "bytes": 10446,
+      "difference_db": 0.0002,
+      "image": "photo_gradient_wide",
+      "libwebp_decoded_y_psnr_db": 37.0872,
+      "oracle_y_psnr_db": 37.0874,
+      "quality": 50
+    },
+    {
+      "bytes": 21072,
+      "difference_db": 0.0003,
+      "image": "photo_gradient_wide",
+      "libwebp_decoded_y_psnr_db": 37.2675,
+      "oracle_y_psnr_db": 37.2672,
+      "quality": 75
+    },
+    {
+      "bytes": 99646,
+      "difference_db": 0.0001,
+      "image": "photo_gradient_wide",
+      "libwebp_decoded_y_psnr_db": 38.7935,
+      "oracle_y_psnr_db": 38.7934,
+      "quality": 85
+    },
+    {
+      "bytes": 211534,
+      "difference_db": 0.0001,
+      "image": "photo_gradient_wide",
+      "libwebp_decoded_y_psnr_db": 41.9779,
+      "oracle_y_psnr_db": 41.978,
+      "quality": 90
+    },
+    {
+      "bytes": 324086,
+      "difference_db": 0.0,
+      "image": "photo_gradient_wide",
+      "libwebp_decoded_y_psnr_db": 44.795,
+      "oracle_y_psnr_db": 44.795,
+      "quality": 95
+    },
+    {
+      "bytes": 4362,
+      "difference_db": 0.0,
+      "image": "photo_noise_detail",
+      "libwebp_decoded_y_psnr_db": 36.5448,
+      "oracle_y_psnr_db": 36.5448,
+      "quality": 10
+    },
+    {
+      "bytes": 6342,
+      "difference_db": 0.0001,
+      "image": "photo_noise_detail",
+      "libwebp_decoded_y_psnr_db": 36.9419,
+      "oracle_y_psnr_db": 36.942,
+      "quality": 25
+    },
+    {
+      "bytes": 11500,
+      "difference_db": 0.0002,
+      "image": "photo_noise_detail",
+      "libwebp_decoded_y_psnr_db": 37.0958,
+      "oracle_y_psnr_db": 37.096,
+      "quality": 50
+    },
+    {
+      "bytes": 23532,
+      "difference_db": 0.0004,
+      "image": "photo_noise_detail",
+      "libwebp_decoded_y_psnr_db": 37.2751,
+      "oracle_y_psnr_db": 37.2747,
+      "quality": 75
+    },
+    {
+      "bytes": 106230,
+      "difference_db": 0.0001,
+      "image": "photo_noise_detail",
+      "libwebp_decoded_y_psnr_db": 38.8093,
+      "oracle_y_psnr_db": 38.8094,
+      "quality": 85
+    },
+    {
+      "bytes": 225452,
+      "difference_db": 0.0001,
+      "image": "photo_noise_detail",
+      "libwebp_decoded_y_psnr_db": 41.9939,
+      "oracle_y_psnr_db": 41.9938,
+      "quality": 90
+    },
+    {
+      "bytes": 345724,
+      "difference_db": 0.0,
+      "image": "photo_noise_detail",
+      "libwebp_decoded_y_psnr_db": 44.8157,
+      "oracle_y_psnr_db": 44.8157,
+      "quality": 95
+    },
+    {
+      "bytes": 3564,
+      "difference_db": 0.0004,
+      "image": "photo_texture_detail",
+      "libwebp_decoded_y_psnr_db": 36.4794,
+      "oracle_y_psnr_db": 36.479,
+      "quality": 10
+    },
+    {
+      "bytes": 5058,
+      "difference_db": 0.0001,
+      "image": "photo_texture_detail",
+      "libwebp_decoded_y_psnr_db": 36.9136,
+      "oracle_y_psnr_db": 36.9135,
+      "quality": 25
+    },
+    {
+      "bytes": 8986,
+      "difference_db": 0.0001,
+      "image": "photo_texture_detail",
+      "libwebp_decoded_y_psnr_db": 37.0691,
+      "oracle_y_psnr_db": 37.069,
+      "quality": 50
+    },
+    {
+      "bytes": 18270,
+      "difference_db": 0.0001,
+      "image": "photo_texture_detail",
+      "libwebp_decoded_y_psnr_db": 37.2612,
+      "oracle_y_psnr_db": 37.2611,
+      "quality": 75
+    },
+    {
+      "bytes": 83004,
+      "difference_db": 0.0001,
+      "image": "photo_texture_detail",
+      "libwebp_decoded_y_psnr_db": 38.7976,
+      "oracle_y_psnr_db": 38.7977,
+      "quality": 85
+    },
+    {
+      "bytes": 175780,
+      "difference_db": 0.0001,
+      "image": "photo_texture_detail",
+      "libwebp_decoded_y_psnr_db": 41.9948,
+      "oracle_y_psnr_db": 41.9947,
+      "quality": 90
+    },
+    {
+      "bytes": 268924,
+      "difference_db": 0.0001,
+      "image": "photo_texture_detail",
+      "libwebp_decoded_y_psnr_db": 44.8245,
+      "oracle_y_psnr_db": 44.8244,
+      "quality": 95
+    },
+    {
+      "bytes": 3660,
+      "difference_db": 0.0118,
+      "image": "screenshot_dashboard",
+      "libwebp_decoded_y_psnr_db": 45.535,
+      "oracle_y_psnr_db": 45.5468,
+      "quality": 10
+    },
+    {
+      "bytes": 4866,
+      "difference_db": 0.1785,
+      "image": "screenshot_dashboard",
+      "libwebp_decoded_y_psnr_db": 50.071,
+      "oracle_y_psnr_db": 49.8925,
+      "quality": 25
+    },
+    {
+      "bytes": 5956,
+      "difference_db": 0.1441,
+      "image": "screenshot_dashboard",
+      "libwebp_decoded_y_psnr_db": 53.4873,
+      "oracle_y_psnr_db": 53.3432,
+      "quality": 50
+    },
+    {
+      "bytes": 6534,
+      "difference_db": 0.1575,
+      "image": "screenshot_dashboard",
+      "libwebp_decoded_y_psnr_db": 54.4561,
+      "oracle_y_psnr_db": 54.2986,
+      "quality": 75
+    },
+    {
+      "bytes": 7990,
+      "difference_db": 0.2328,
+      "image": "screenshot_dashboard",
+      "libwebp_decoded_y_psnr_db": 55.7212,
+      "oracle_y_psnr_db": 55.4884,
+      "quality": 85
+    },
+    {
+      "bytes": 9668,
+      "difference_db": 0.3124,
+      "image": "screenshot_dashboard",
+      "libwebp_decoded_y_psnr_db": 57.4317,
+      "oracle_y_psnr_db": 57.1193,
+      "quality": 90
+    },
+    {
+      "bytes": 11536,
+      "difference_db": 0.1628,
+      "image": "screenshot_dashboard",
+      "libwebp_decoded_y_psnr_db": 58.0862,
+      "oracle_y_psnr_db": 57.9234,
+      "quality": 95
+    },
+    {
+      "bytes": 5068,
+      "difference_db": 0.0126,
+      "image": "screenshot_panel_grid",
+      "libwebp_decoded_y_psnr_db": 42.3019,
+      "oracle_y_psnr_db": 42.2893,
+      "quality": 10
+    },
+    {
+      "bytes": 7926,
+      "difference_db": 0.0776,
+      "image": "screenshot_panel_grid",
+      "libwebp_decoded_y_psnr_db": 46.6276,
+      "oracle_y_psnr_db": 46.55,
+      "quality": 25
+    },
+    {
+      "bytes": 10572,
+      "difference_db": 0.1067,
+      "image": "screenshot_panel_grid",
+      "libwebp_decoded_y_psnr_db": 49.4876,
+      "oracle_y_psnr_db": 49.3809,
+      "quality": 50
+    },
+    {
+      "bytes": 11916,
+      "difference_db": 0.0506,
+      "image": "screenshot_panel_grid",
+      "libwebp_decoded_y_psnr_db": 50.2843,
+      "oracle_y_psnr_db": 50.3349,
+      "quality": 75
+    },
+    {
+      "bytes": 15890,
+      "difference_db": 0.1677,
+      "image": "screenshot_panel_grid",
+      "libwebp_decoded_y_psnr_db": 52.2793,
+      "oracle_y_psnr_db": 52.1116,
+      "quality": 85
+    },
+    {
+      "bytes": 20394,
+      "difference_db": 0.3052,
+      "image": "screenshot_panel_grid",
+      "libwebp_decoded_y_psnr_db": 53.7665,
+      "oracle_y_psnr_db": 53.4613,
+      "quality": 90
+    },
+    {
+      "bytes": 25622,
+      "difference_db": 0.2375,
+      "image": "screenshot_panel_grid",
+      "libwebp_decoded_y_psnr_db": 54.7157,
+      "oracle_y_psnr_db": 54.4782,
+      "quality": 95
+    }
+  ],
+  "producer": {
+    "command": "go run ./cmd/tqbench -gates -encoded-dir DIR && python3 tools/libwebp_baseline.py --tqwebp-dir DIR --tqwebp-out FILE",
+    "library": "libwebp 1.5.0",
+    "reached_through": "Pillow 11.3.0"
+  },
+  "purpose": "Differential check of specification section 11.3. libwebp decodes every file tqwebp produced, and the luma PSNR it yields is compared with the number the in-process oracle reports."
+}

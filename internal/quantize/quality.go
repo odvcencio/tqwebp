@@ -35,18 +35,42 @@ func IndexForQuality(quality int) Index {
 }
 
 // qualityAnchors carries the calibration points. Quality must rise and
-// index must fall down the list; TestQualityMapIsMonotone pins that.
+// index must fall down the list; TestPinQualityMapIsMonotone pins that.
+//
+// # How these numbers were measured
+//
+// libwebp encoded the photo class of the corpus at every quality from 1
+// to 100. tqwebp encoded the same images at every quantizer index from 0
+// to 127. Each anchor names the index whose median luma PSNR, measured
+// after each encoder's own correct inverse colour conversion, sits
+// closest to libwebp's median at that quality. Quality 75 therefore
+// lands within 0.02 dB of libwebp's quality 75, which is the calibration
+// specification section 7.4 asks for.
+//
+// Below quality 10 the anchors leave the measured curve on purpose. The
+// corpus carries per-pixel noise, and every encoder's luma PSNR flattens
+// against that noise floor, so libwebp's own quality 1 still sits only
+// 0.5 dB under its quality 10. Following the measurement there would
+// leave the coarsest third of the quantizer range unreachable. The
+// anchors run down to index 127 instead, so the knob still spans the
+// whole quantizer.
 var qualityAnchors = []struct {
 	quality int
 	index   int
 }{
 	{0, 127},
-	{10, 100},
-	{25, 76},
-	{50, 52},
-	{75, 30},
-	{85, 20},
-	{90, 14},
-	{95, 7},
+	{5, 90},
+	{10, 66},
+	{20, 47},
+	{30, 40},
+	{40, 33},
+	{50, 27},
+	{60, 25},
+	{70, 23},
+	{75, 22},
+	{80, 18},
+	{85, 13},
+	{90, 7},
+	{95, 3},
 	{100, 0},
 }

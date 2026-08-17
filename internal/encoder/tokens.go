@@ -1,4 +1,4 @@
-package webp
+package encoder
 
 import (
 	"m31labs.dev/tqwebp/internal/boolenc"

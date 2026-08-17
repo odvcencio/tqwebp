@@ -40,6 +40,7 @@ import (
 	"image"
 	"io"
 
+	"m31labs.dev/tqwebp/internal/encoder"
 	"m31labs.dev/tqwebp/internal/frame"
 	"m31labs.dev/tqwebp/internal/yuv"
 )
@@ -89,7 +90,7 @@ var (
 // size, the frame tag, and the partition length all precede the data they
 // describe.
 func Encode(w io.Writer, m image.Image, o *Options) error {
-	opts, err := normalize(o)
+	cfg, err := configFor(o)
 	if err != nil {
 		return err
 	}
@@ -104,29 +105,26 @@ func Encode(w io.Writer, m image.Image, o *Options) error {
 	if !yuv.IsOpaque(m) {
 		return ErrAlphaUnsupported
 	}
-
-	enc := newEncoder(yuv.Convert(m), opts)
-	enc.run()
-	return enc.writeFile(w)
+	return encoder.Encode(w, m, cfg)
 }
 
-// normalize validates o and fills its defaults in.
-func normalize(o *Options) (Options, error) {
-	opts := Options{Quality: DefaultQuality, Method: DefaultMethod}
+// configFor validates o and fills its defaults in.
+func configFor(o *Options) (encoder.Config, error) {
+	cfg := encoder.Config{Quality: DefaultQuality, Method: DefaultMethod}
 	if o == nil {
-		return opts, nil
+		return cfg, nil
 	}
 	if o.Quality < 0 || o.Quality > 100 {
-		return opts, fmt.Errorf("%w: quality %d is outside 0 to 100", ErrInvalidOptions, o.Quality)
+		return cfg, fmt.Errorf("%w: quality %d is outside 0 to 100", ErrInvalidOptions, o.Quality)
 	}
 	if o.Method < 0 || o.Method > 6 {
-		return opts, fmt.Errorf("%w: method %d is outside 0 to 6", ErrInvalidOptions, o.Method)
+		return cfg, fmt.Errorf("%w: method %d is outside 0 to 6", ErrInvalidOptions, o.Method)
 	}
 	if o.Quality != 0 {
-		opts.Quality = o.Quality
+		cfg.Quality = o.Quality
 	}
 	if o.Method != 0 {
-		opts.Method = o.Method
+		cfg.Method = o.Method
 	}
-	return opts, nil
+	return cfg, nil
 }

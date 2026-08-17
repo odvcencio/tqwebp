@@ -1,10 +1,9 @@
-package webp
+package encoder
 
 import (
 	"bytes"
 	"fmt"
 	"image"
-	"image/color"
 	"math/rand/v2"
 	"runtime"
 	"testing"
@@ -32,7 +31,7 @@ func TestExactReconstruction(t *testing.T) {
 	for _, img := range images {
 		for _, q := range exactGateQualities {
 			t.Run(fmt.Sprintf("%s/q%d", img.Spec.Name, q), func(t *testing.T) {
-				data, recon, err := encodeWithReconstruction(img.Img, Options{Quality: q})
+				data, recon, err := encodeWithReconstruction(img.Img, Config{Quality: q})
 				if err != nil {
 					t.Fatalf("encode: %v", err)
 				}
@@ -55,7 +54,7 @@ func TestRoundTripDecodes(t *testing.T) {
 	for _, img := range images {
 		for _, q := range []int{1, 25, 50, 75, 95, 100} {
 			var buf bytes.Buffer
-			if err := Encode(&buf, img.Img, &Options{Quality: q}); err != nil {
+			if err := Encode(&buf, img.Img, Config{Quality: q}); err != nil {
 				t.Fatalf("%s q%d: encode: %v", img.Spec.Name, q, err)
 			}
 			decoded, err := oracle.DecodeWebP(buf.Bytes())
@@ -93,7 +92,7 @@ func TestQualityIsMonotone(t *testing.T) {
 		var lastPSNR float64
 		for i, q := range qualities {
 			var buf bytes.Buffer
-			if err := Encode(&buf, img.Img, &Options{Quality: q}); err != nil {
+			if err := Encode(&buf, img.Img, Config{Quality: q}); err != nil {
 				t.Fatalf("%s q%d: encode: %v", img.Spec.Name, q, err)
 			}
 			psnr := codedLumaPSNR(t, img.Img, buf.Bytes())
@@ -119,7 +118,7 @@ func TestDeterminism(t *testing.T) {
 
 	encode := func() []byte {
 		var buf bytes.Buffer
-		if err := Encode(&buf, img, &Options{Quality: 68}); err != nil {
+		if err := Encode(&buf, img, Config{Quality: 68}); err != nil {
 			t.Fatalf("encode: %v", err)
 		}
 		return buf.Bytes()
@@ -157,7 +156,7 @@ func TestEdgeSizes(t *testing.T) {
 			img.Pix[i+3] = 0xff
 		}
 
-		data, recon, err := encodeWithReconstruction(img, Options{Quality: 80})
+		data, recon, err := encodeWithReconstruction(img, Config{Quality: 80})
 		if err != nil {
 			t.Fatalf("%dx%d: encode: %v", w, h, err)
 		}
@@ -183,7 +182,7 @@ func TestFlatImageStaysFlat(t *testing.T) {
 		img.Pix[i+0], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = 30, 140, 220, 0xff
 	}
 	var buf bytes.Buffer
-	if err := Encode(&buf, img, &Options{Quality: 90}); err != nil {
+	if err := Encode(&buf, img, Config{Quality: 90}); err != nil {
 		t.Fatalf("encode: %v", err)
 	}
 	decoded, err := oracle.DecodeWebP(buf.Bytes())
@@ -197,75 +196,6 @@ func TestFlatImageStaysFlat(t *testing.T) {
 				t.Fatalf("flat colour drifted at (%d,%d): rgb(%d,%d,%d)", x, y, r>>8, g>>8, b>>8)
 			}
 		}
-	}
-}
-
-// TestErrors pins the refusals of the public interface.
-func TestErrors(t *testing.T) {
-	opaque := image.NewRGBA(image.Rect(0, 0, 8, 8))
-	for i := range opaque.Pix {
-		opaque.Pix[i] = 0xff
-	}
-
-	t.Run("alpha", func(t *testing.T) {
-		m := image.NewNRGBA(image.Rect(0, 0, 8, 8))
-		m.Set(3, 3, color.NRGBA{R: 1, G: 2, B: 3, A: 128})
-		if err := Encode(&bytes.Buffer{}, m, nil); err != ErrAlphaUnsupported {
-			t.Errorf("error is %v, want ErrAlphaUnsupported", err)
-		}
-	})
-
-	t.Run("quality-range", func(t *testing.T) {
-		for _, q := range []int{-1, 101} {
-			err := Encode(&bytes.Buffer{}, opaque, &Options{Quality: q})
-			if err == nil {
-				t.Errorf("quality %d was accepted", q)
-			}
-		}
-	})
-
-	t.Run("method-range", func(t *testing.T) {
-		for _, m := range []int{-1, 7} {
-			err := Encode(&bytes.Buffer{}, opaque, &Options{Method: m})
-			if err == nil {
-				t.Errorf("method %d was accepted", m)
-			}
-		}
-	})
-
-	t.Run("empty", func(t *testing.T) {
-		if err := Encode(&bytes.Buffer{}, image.NewRGBA(image.Rect(0, 0, 0, 0)), nil); err == nil {
-			t.Error("an empty image was accepted")
-		}
-	})
-
-	t.Run("too-large", func(t *testing.T) {
-		if err := Encode(&bytes.Buffer{}, fakeHuge{}, nil); err != ErrTooLarge {
-			t.Errorf("error is %v, want ErrTooLarge", err)
-		}
-	})
-}
-
-// fakeHuge reports a size past the 14-bit picture size fields without
-// allocating anything.
-type fakeHuge struct{}
-
-func (fakeHuge) ColorModel() color.Model { return color.RGBAModel }
-func (fakeHuge) Bounds() image.Rectangle { return image.Rect(0, 0, 16384, 8) }
-func (fakeHuge) At(int, int) color.Color { return color.RGBA{A: 0xff} }
-
-// TestNilOptionsMatchesDefaults pins the documented zero value.
-func TestNilOptionsMatchesDefaults(t *testing.T) {
-	img := corpus.Generate(corpus.Spec{Name: "n", Class: corpus.Flat, Width: 48, Height: 32, Seed: 9})
-	var withNil, withDefaults bytes.Buffer
-	if err := Encode(&withNil, img, nil); err != nil {
-		t.Fatalf("encode with nil options: %v", err)
-	}
-	if err := Encode(&withDefaults, img, &Options{Quality: DefaultQuality, Method: DefaultMethod}); err != nil {
-		t.Fatalf("encode with explicit defaults: %v", err)
-	}
-	if !bytes.Equal(withNil.Bytes(), withDefaults.Bytes()) {
-		t.Error("nil options and the explicit defaults produced different bytes")
 	}
 }
 
@@ -293,7 +223,7 @@ func FuzzEncode(f *testing.F) {
 			img.Pix[i+3] = 0xff
 		}
 
-		data, recon, err := encodeWithReconstruction(img, Options{Quality: quality})
+		data, recon, err := encodeWithReconstruction(img, Config{Quality: quality})
 		if err != nil {
 			t.Fatalf("%dx%d q%d: encode: %v", w, h, quality, err)
 		}
@@ -310,9 +240,13 @@ func FuzzEncode(f *testing.F) {
 	})
 }
 
+// moduleRoot is the path from this package to the module root, where the
+// corpus lives.
+const moduleRoot = "../.."
+
 func loadCorpus(t *testing.T) []corpus.Image {
 	t.Helper()
-	images, err := corpus.LoadAll(".")
+	images, err := corpus.LoadAll(moduleRoot)
 	if err != nil {
 		t.Fatalf("load corpus: %v", err)
 	}

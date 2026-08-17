@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"image"
 	"io"
-
-	"golang.org/x/image/webp"
 )
 
 // EncodeFunc is the shape every encoder this oracle measures must expose.
@@ -40,12 +38,28 @@ type Result struct {
 // the decoded image against src. This is the WP-0 backbone gate: every
 // later encoder work package proves itself through this same path.
 //
-// RoundTrip does not care what enc's target format is, as long as
-// golang.org/x/image/webp can decode its output. Baseline encoders that
-// emit a different container (for example, stdlib JPEG) use RoundTripWith
-// and supply their own decoder instead.
+// The decode goes through DecodeWebP, which reads the planes with
+// golang.org/x/image and then inverts them with libwebp's own BT.601
+// limited-range coefficients. The inversion matters: x/image applies the
+// full-range JFIF coefficients instead, which moves red, green, and blue
+// by up to 20 per channel and charges a WebP encoder several decibels for
+// a decoder's convention. See webpcolor.go.
+//
+// RoundTrip does not care what enc's target format is, as long as the
+// output is a lossy WebP file. Baseline encoders that emit a different
+// container (for example, stdlib JPEG) use RoundTripWith and supply their
+// own decoder instead.
 func RoundTrip(enc EncodeFunc, src image.Image) (*Result, error) {
-	return RoundTripWith(enc, src, webp.Decode)
+	return RoundTripWith(enc, src, decodeWebPReader)
+}
+
+// decodeWebPReader adapts DecodeWebP to the DecodeFunc shape.
+func decodeWebPReader(r io.Reader) (image.Image, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	return DecodeWebP(data)
 }
 
 // DecodeFunc is the shape of an independent decoder RoundTripWith uses to

@@ -1,4 +1,4 @@
-package webp
+package encoder
 
 import (
 	"image"
@@ -35,7 +35,7 @@ func craftFrame(t *testing.T, setup func(mb *macroblock)) []byte {
 func craftFrameAt(t *testing.T, index quantize.Index, setup func(mb *macroblock)) []byte {
 	t.Helper()
 	planes := yuv.NewPlanes(16, 16)
-	enc := newEncoder(planes, Options{Quality: DefaultQuality, Method: DefaultMethod})
+	enc := newEncoder(planes, Config{Quality: 75, Method: 4})
 	enc.q = quantize.New(index)
 
 	mb := &enc.mbs[0]
