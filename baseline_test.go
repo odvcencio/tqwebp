@@ -1,4 +1,4 @@
-package tqwebp
+package webp
 
 import (
 	"os"

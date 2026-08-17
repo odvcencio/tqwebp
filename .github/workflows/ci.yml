@@ -47,14 +47,31 @@ jobs:
       - name: Test (oracle self-tests + baseline golden regeneration-check)
         run: go test -count=1 ./...
 
-      - name: Module graph stays pure (stdlib + golang.org/x/image only)
+      - name: Module graph stays pure (stdlib, golang.org/x, turboquant only)
         run: |
-          extra="$(go list -m all | tail -n +2 | grep -v '^golang.org/x/' || true)"
+          extra="$(go list -m all | tail -n +2 | grep -v '^golang.org/x/' | grep -v '^m31labs.dev/turboquant ' || true)"
           if [ -n "$extra" ]; then
-            echo "::error::root module depends on non-golang.org/x/* modules:"
+            echo "::error::root module depends on an unexpected module:"
             echo "$extra"
             exit 1
           fi
+
+      - name: Encoder import graph carries no oracle and no x/image
+        run: |
+          bad="$(go list -deps m31labs.dev/tqwebp | grep -E 'golang.org/x/image|m31labs.dev/tqwebp/oracle' || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::the encoder imports a test-only dependency:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "encoder dependencies outside the standard library:"
+          go list -deps m31labs.dev/tqwebp | grep -E '^(m31labs.dev|golang.org|github.com)' || true
+
+      - name: Build for every supported target
+        run: |
+          for target in linux/amd64 linux/arm64 darwin/arm64 js/wasm wasip1/wasm windows/amd64; do
+            GOOS="${target%/*}" GOARCH="${target#*/}" CGO_ENABLED=0 go build ./... || exit 1
+          done
 
   bench-deepteams:
     name: bench/deepteams (black-box baseline, own module)

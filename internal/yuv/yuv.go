@@ -85,6 +85,22 @@ func NewPlanes(width, height int) *Planes {
 	}
 }
 
+// YCbCr views the planes as an *image.YCbCr, in the exact shape a VP8
+// decoder returns for the same frame: full padded strides, and a
+// rectangle that covers the visible picture only. Plane comparisons
+// against a decoded frame use this view.
+func (p *Planes) YCbCr() *image.YCbCr {
+	return &image.YCbCr{
+		Y:              p.Y,
+		Cb:             p.U,
+		Cr:             p.V,
+		YStride:        p.YStride,
+		CStride:        p.CStride,
+		SubsampleRatio: image.YCbCrSubsampleRatio420,
+		Rect:           image.Rect(0, 0, p.Width, p.Height),
+	}
+}
+
 // RGBToY converts one pixel to a limited-range luma sample.
 func RGBToY(r, g, b uint8) uint8 {
 	y := (yR*int32(r) + yG*int32(g) + yB*int32(b) + rounding) >> shift

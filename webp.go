@@ -1,0 +1,132 @@
+// Package webp encodes images in the lossy WebP format, in pure Go.
+//
+// A lossy WebP file is a VP8 key frame inside a RIFF container. This
+// package writes that file with no cgo, no WebAssembly runtime, and no
+// foreign function interface. Its output decodes in every browser and in
+// golang.org/x/image/webp, which this repository's tests use as an
+// independent oracle.
+//
+// The interface mirrors image/jpeg, so callers who know the standard
+// library know this package:
+//
+//	f, err := os.Create("photo.webp")
+//	if err != nil {
+//		return err
+//	}
+//	defer f.Close()
+//	if err := webp.Encode(f, img, &webp.Options{Quality: 80}); err != nil {
+//		return err
+//	}
+//
+// # Determinism
+//
+// The same image and the same options always produce the same bytes, on
+// every platform and at every value of GOMAXPROCS. Asset pipelines that
+// hash their output can rely on that.
+//
+// # Scope
+//
+// This release codes opaque images only. Encode returns
+// ErrAlphaUnsupported for an image with a translucent pixel, so no
+// pipeline can lose a mask without noticing. Every macroblock uses one of
+// the four whole-block luma prediction modes and one of the four chroma
+// modes. The 4x4 sub-modes, the rate-distortion mode search, and the
+// two-pass probability optimization arrive in later releases.
+package webp
+
+import (
+	"errors"
+	"fmt"
+	"image"
+	"io"
+
+	"m31labs.dev/tqwebp/internal/frame"
+	"m31labs.dev/tqwebp/internal/yuv"
+)
+
+// DefaultQuality is the quality Encode uses when Options is nil or when
+// its Quality field is zero.
+const DefaultQuality = 75
+
+// DefaultMethod is the effort level Encode uses when Options is nil or
+// when its Method field is zero.
+const DefaultMethod = 4
+
+// Options configures the encoder. A nil *Options, and the zero value,
+// both mean quality DefaultQuality and method DefaultMethod.
+type Options struct {
+	// Quality selects the rate-distortion point, from 1, the smallest
+	// file, to 100, the best picture. Higher quality always spends more
+	// bytes and always keeps more detail. A zero Quality means
+	// DefaultQuality, which makes the zero value of Options useful.
+	Quality int
+	// Method selects the effort level, from 0, the fastest, to 6, the
+	// slowest and best. This release implements one effort level and
+	// accepts every value in the range, so callers never have to change
+	// the call when later releases add the rest.
+	Method int
+}
+
+// Sentinel errors Encode returns. Callers can test them with errors.Is.
+var (
+	// ErrAlphaUnsupported reports an image with at least one translucent
+	// pixel. This release codes opaque images only, and it refuses rather
+	// than dropping the alpha channel in silence.
+	ErrAlphaUnsupported = errors.New("tqwebp: alpha channel is not supported yet")
+
+	// ErrInvalidOptions reports an option value outside its range.
+	ErrInvalidOptions = errors.New("tqwebp: invalid options")
+
+	// ErrTooLarge reports an image wider or taller than 16383 pixels,
+	// which the VP8 picture size fields cannot carry.
+	ErrTooLarge = frame.ErrTooLarge
+)
+
+// Encode writes m to w in the lossy WebP format. A nil o means the
+// default options.
+//
+// Encode buffers the whole file before it writes, because the container
+// size, the frame tag, and the partition length all precede the data they
+// describe.
+func Encode(w io.Writer, m image.Image, o *Options) error {
+	opts, err := normalize(o)
+	if err != nil {
+		return err
+	}
+
+	b := m.Bounds()
+	if b.Dx() <= 0 || b.Dy() <= 0 {
+		return fmt.Errorf("tqwebp: image is %dx%d pixels", b.Dx(), b.Dy())
+	}
+	if b.Dx() > frame.MaxDimension || b.Dy() > frame.MaxDimension {
+		return ErrTooLarge
+	}
+	if !yuv.IsOpaque(m) {
+		return ErrAlphaUnsupported
+	}
+
+	enc := newEncoder(yuv.Convert(m), opts)
+	enc.run()
+	return enc.writeFile(w)
+}
+
+// normalize validates o and fills its defaults in.
+func normalize(o *Options) (Options, error) {
+	opts := Options{Quality: DefaultQuality, Method: DefaultMethod}
+	if o == nil {
+		return opts, nil
+	}
+	if o.Quality < 0 || o.Quality > 100 {
+		return opts, fmt.Errorf("%w: quality %d is outside 0 to 100", ErrInvalidOptions, o.Quality)
+	}
+	if o.Method < 0 || o.Method > 6 {
+		return opts, fmt.Errorf("%w: method %d is outside 0 to 6", ErrInvalidOptions, o.Method)
+	}
+	if o.Quality != 0 {
+		opts.Quality = o.Quality
+	}
+	if o.Method != 0 {
+		opts.Method = o.Method
+	}
+	return opts, nil
+}

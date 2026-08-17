@@ -13,9 +13,4 @@
 //go:generate go run ./cmd/genbt601
 //go:generate go run ./cmd/tqbench -update -out testdata/golden/jpeg_baseline.txt
 
-// Package tqwebp is the module root of tqwebp, a pure-Go lossy WebP
-// encoder under construction. This stage of the project (work package 0)
-// ships no encoder yet. It ships the measurement harness that gates every
-// later encoder work package: the generated test corpus, the correctness
-// oracle, and the baseline comparison numbers.
-package tqwebp
+package webp
