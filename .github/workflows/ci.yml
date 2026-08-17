@@ -67,6 +67,9 @@ jobs:
           echo "encoder dependencies outside the standard library:"
           go list -deps m31labs.dev/tqwebp | grep -E '^(m31labs.dev|golang.org|github.com)' || true
 
+      - name: Release gates (G1 and G2 block; G2b is reported)
+        run: go run ./cmd/tqbench -gates
+
       - name: Build for every supported target
         run: |
           for target in linux/amd64 linux/arm64 darwin/arm64 js/wasm wasip1/wasm windows/amd64; do
