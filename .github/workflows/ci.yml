@@ -1,0 +1,88 @@
+# CI for work package 0: the corpus, the correctness oracle, and the
+# baseline harness. Two jobs:
+#
+#   - root: build, vet, gofmt, and test the root module. go test runs the
+#     oracle self-tests and the baseline goldens' regeneration-check
+#     (testdata/golden/jpeg_baseline.txt must match a fresh run).
+#   - bench-deepteams: build, vet, and test the bench/deepteams nested
+#     module on its own, proving the root module's go.mod stays clean of
+#     github.com/deepteams/webp while still gating its own golden table
+#     (testdata/golden/deepteams_baseline.txt).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  root:
+    name: root module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: gofmt
+        run: |
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then
+            echo "gofmt would reformat:"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: Test (oracle self-tests + baseline golden regeneration-check)
+        run: go test -count=1 ./...
+
+      - name: Module graph stays pure (stdlib + golang.org/x/image only)
+        run: |
+          extra="$(go list -m all | tail -n +2 | grep -v '^golang.org/x/' || true)"
+          if [ -n "$extra" ]; then
+            echo "::error::root module depends on non-golang.org/x/* modules:"
+            echo "$extra"
+            exit 1
+          fi
+
+  bench-deepteams:
+    name: bench/deepteams (black-box baseline, own module)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bench/deepteams
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bench/deepteams/go.mod
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: gofmt
+        run: |
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then
+            echo "gofmt would reformat:"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: Test (deepteams golden regeneration-check)
+        run: go test -count=1 ./...

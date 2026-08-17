@@ -1,0 +1,15 @@
+# Build output
+/gencorpus
+/tqbench
+/cmd/gencorpus/gencorpus
+/cmd/tqbench/tqbench
+/bench/deepteams/dtbench
+/bench/deepteams/cmd/dtbench/dtbench
+
+# Go tooling
+*.test
+*.out
+
+# Editor and OS noise
+.DS_Store
+*.swp
