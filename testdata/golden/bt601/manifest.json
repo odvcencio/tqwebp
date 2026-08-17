@@ -1,0 +1,38 @@
+{
+  "purpose": "Pin tqwebp's BT.601 limited-range colour conversion against libwebp itself (tqwebp specification sections 7.2 and 11.3). The forward pin compares tqwebp's Y/U/V planes with the planes inside a file libwebp encoded. The inverse pin compares tqwebp's YUV-to-RGB path with the RGB pixels libwebp decoded.",
+  "producer": {
+    "library": "libwebp",
+    "version": "1.5.0",
+    "reached_through": "Pillow 11.3.0 (python3 -c 'from PIL import features; features.version(\"webp\")')",
+    "note": "The cwebp and dwebp command line tools were absent on the machine that produced this fixture. Pillow links the same libwebp encoder and decoder, so the fixture carries the same authority."
+  },
+  "files": [
+    {
+      "name": "ramp.png",
+      "sha256": "277271d79eae191d85ec53c1d841550b6a45c3982cda3468393200b3f635794f",
+      "role": "source image",
+      "command": "go run ./cmd/genbt601",
+      "note": "128x128 pixels, 64 flat 16x16 patches, the four-level red-green-blue cube. internal/yuv.ColorRamp builds the same pixels in Go, and the test checks that."
+    },
+    {
+      "name": "libwebp_q100.webp",
+      "sha256": "cd6080776a1fe2bfbeb229d11bde8b7069565932b0be4f217fdd13f9f47716a6",
+      "role": "forward pin",
+      "command": "python3 -c \"from PIL import Image; Image.open('ramp.png').convert('RGB').save('libwebp_q100.webp','WEBP',quality=100,method=6,lossless=False)\""
+    },
+    {
+      "name": "libwebp_rgb.png",
+      "sha256": "502ba378ed84efa10c18d8beb8fc6c2b6b0ef97f75f879553fd831c8387e5664",
+      "role": "inverse pin",
+      "command": "python3 -c \"from PIL import Image; Image.open('libwebp_q100.webp').convert('RGB').save('libwebp_rgb.png','PNG',optimize=True)\""
+    }
+  ],
+  "measured": {
+    "forward_max_abs_difference_at_patch_centres": {"y": 0, "u": 1, "v": 1},
+    "forward_note": "The luma planes agree exactly. The chroma planes differ by at most one, which is quantizer noise at quality 100. A full-range JFIF conversion would differ by 16 or more on dark patches, so the tolerance of two still separates the two conventions.",
+    "inverse_max_abs_channel_difference_inside_patches": 0,
+    "inverse_note": "oracle.DecodeWebP reproduces libwebp's RGB output exactly, two pixels or more away from a patch edge. Nearer the edge libwebp applies its fancy bilinear chroma upsampling and this repository repeats each chroma sample, as golang.org/x/image does. The oracle test skips that two-pixel band.",
+    "x_image_convention_gap": 20,
+    "x_image_note": "golang.org/x/image inverts the same planes with full-range JFIF coefficients and lands up to 20 per channel away from libwebp. Every cross-codec measurement in this repository therefore goes through oracle.DecodeWebP."
+  }
+}
