@@ -1,2 +1,4 @@
 golang.org/x/image v0.38.0 h1:5l+q+Y9JDC7mBOMjo4/aPhMDcxEptsX+Tt3GgRQRPuE=
 golang.org/x/image v0.38.0/go.mod h1:/3f6vaXC+6CEanU4KJxbcUZyEePbyKbaLoDOe4ehFYY=
+m31labs.dev/turboquant v0.2.1-0.20260817041549-a9417b0723e6 h1:E3CzQzy6zizZ95jihH6LR0qPUPohjpnqODyGMqfuP4o=
+m31labs.dev/turboquant v0.2.1-0.20260817041549-a9417b0723e6/go.mod h1:7nkx3Sf/xgz/6V992ePuUpXTN6HyWL+2ueOGCEdlg84=
