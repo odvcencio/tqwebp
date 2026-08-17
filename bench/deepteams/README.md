@@ -28,29 +28,25 @@ the quality-plateau question directly), then scores the result through
 `golang.org/x/image/webp` decode, the same PSNR/SSIM formulas, that every
 other baseline in this project uses.
 
-## Read the numbers with this caveat in mind
+## The colour convention question, and its answer
 
-`oracle.RoundTrip` decodes every WebP file through
-`golang.org/x/image/webp`, then reads pixels through that image's `At`
-method. `image.YCbCr.At` applies the standard full-range (JFIF-style)
-YCbCr-to-RGB formula. deepteams/webp's forward conversion, correctly,
-targets the limited-range (studio-swing) BT.601 convention real WebP
-decoders and browsers expect (see the parent spec, §7.2 and open question
-Q8). Decoding limited-range-encoded planes with a full-range formula lifts
-black levels and compresses white levels: it shows up here as Y-PSNR in
-the low-to-mid 20s and 30s decibels even at quality 90-95, while SSIM
-(less sensitive to a near-uniform luminance shift) stays high (0.83-0.99).
+Work package 0 measured this baseline through a decode path that read the
+planes with `image.YCbCr.At`, which applies the full-range JFIF
+conversion. A lossy WebP file carries limited-range BT.601 planes, so that
+path lifted black, compressed white, and reported luma PSNR in the low
+20s even at quality 95. The gap was a decoder convention, never an
+encoder defect.
 
-This is a real, previously-documented decode-convention gap between
-`golang.org/x/image/webp` and libwebp-convention encoders, not an encoder
-defect and not an oracle bug: a compliant browser or `dwebp` would not
-show this shift. It affects every WebP-producing codec measured through
-this exact oracle path, including tqwebp's own encoder once it exists, so
-WP-1's exit gate needs a dev-only `dwebp` differential fixture (parent spec
-§11.3) to separate true codec loss from this decode-convention gap. Treat
-the deepteams/webp numbers here as bytes-at-quality (reliable) plus a
-same-convention-gap PSNR/SSIM (comparable to any other codec measured the
-same way), not as an absolute quality figure.
+Work package 1 closed it. `oracle.DecodeWebP` now inverts the planes with
+libwebp's own coefficients, and `oracle.RoundTrip` uses that path, so this
+table reads the same quality a browser would see. The committed golden
+table moved by more than 20 dB on some rows when the fix landed. The
+numbers are now directly comparable with tqwebp's own.
+
+One residual difference stays, and it favours nobody: libwebp upsamples
+chroma with a bilinear filter and `golang.org/x/image` repeats each chroma
+sample, so both codecs read up to 1.3 dB low on hard colour edges. See
+`testdata/golden/libwebp_differential.json` in the root module.
 
 ## Running it
 

@@ -9,6 +9,10 @@
 //     to it come from the commands recorded in that directory's
 //     manifest.json, which no Go tool can run.
 //
+// The libwebp fixtures under testdata/golden are not on this list either.
+// They need Pillow with WebP support; tools/libwebp_baseline.py makes
+// them.
+//
 //go:generate go run ./cmd/gencorpus
 //go:generate go run ./cmd/genbt601
 //go:generate go run ./cmd/tqbench -update -out testdata/golden/jpeg_baseline.txt
