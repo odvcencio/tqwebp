@@ -7,8 +7,9 @@
 // predicts inside one frame. The encoder must read the same samples, or
 // its picture drifts away from the decoder's.
 //
-// Work package WP-1 codes every macroblock with a 16x16 luma mode, so the
-// ten 4x4 sub-modes of B_PRED do not appear here. They arrive with WP-2.
+// Work package WP-1 codes every macroblock with a 16x16 luma mode. WP-2 adds
+// the ten 4x4 B_PRED primitives while retaining these whole-block predictors
+// as the canonical scalar path.
 package predict
 
 // Mode names one intra prediction mode. The values follow RFC 6386
