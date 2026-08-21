@@ -632,7 +632,7 @@ func (e *encoder) frameBytes() ([]byte, error) {
 		for mbx := 0; mbx < e.mbw; mbx++ {
 			mb := &e.mbs[mby*e.mbw+mbx]
 			mbIndex := mby*e.mbw + mbx
-			first.WriteBool(skipProb, mb.skip)
+			writeSkip(first, skipProb, mb.skip)
 			if mb.useBPred {
 				writeBPredLumaMode(first, &e.bPredModes[mbIndex], &aboveModes[mbx], &leftModes)
 			} else {

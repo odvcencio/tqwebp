@@ -54,7 +54,7 @@ func (w *Writer) WriteBlock(plane int, ctx int, first int, levels *[16]int16) bo
 		}
 
 		w.enc.WriteBool(p[1], true)
-		mag := v
+		mag := int(v)
 		if mag < 0 {
 			mag = -mag
 		}
@@ -68,7 +68,7 @@ func (w *Writer) WriteBlock(plane int, ctx int, first int, levels *[16]int16) bo
 			nextCtx = 1
 		} else {
 			w.enc.WriteBool(p[2], true)
-			w.writeMagnitude(p, int(mag))
+			w.writeMagnitude(p, mag)
 		}
 		w.enc.WriteBool(128, v < 0)
 
@@ -155,9 +155,22 @@ func WriteProbUpdates(enc *boolenc.Encoder) {
 		for j := 0; j < NumBands; j++ {
 			for k := 0; k < NumContexts; k++ {
 				for l := 0; l < NumProbs; l++ {
-					enc.WriteBool(UpdateProbs[i][j][k][l], false)
+					WriteProbUpdate(enc, UpdateProbs[i][j][k][l], 0, false)
 				}
 			}
 		}
+	}
+}
+
+// WriteProbUpdate writes one coefficient-probability update gate and, when
+// update is true, the replacement probability as an eight-bit literal. The
+// literal's value changes the model but not its encoded Q8 cost.
+func WriteProbUpdate(enc *boolenc.Encoder, updateProb, newProb uint8, update bool) {
+	enc.WriteBool(updateProb, update)
+	if !update {
+		return
+	}
+	for bit := 7; bit >= 0; bit-- {
+		enc.WriteBool(128, newProb>>uint(bit)&1 != 0)
 	}
 }

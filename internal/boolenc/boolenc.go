@@ -57,6 +57,17 @@ func New(hint int) *Encoder {
 // excludes the bytes that Finish flushes out of the accumulator.
 func (e *Encoder) Len() int { return len(e.out) }
 
+// ProjectedLen reports the exact byte length Finish would return if it were
+// called at the current coder state, without changing that state. Finish
+// always appends four accumulator bytes; carry propagation can change bytes
+// already present but cannot change their count.
+func (e *Encoder) ProjectedLen() int {
+	if e.finished {
+		return len(e.out)
+	}
+	return len(e.out) + 4
+}
+
 // WriteBool writes one binary decision. Argument prob is the probability
 // that bit is false, on a scale of 256. WriteBool panics when prob is 0,
 // because a zero probability makes the stream undecodable.
