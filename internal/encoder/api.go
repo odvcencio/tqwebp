@@ -12,7 +12,8 @@ import (
 type Config struct {
 	// Quality runs from 1, the smallest file, to 100, the best picture.
 	Quality int
-	// Method runs from 0 to 6. This release implements one effort level.
+	// Method 0 retains the whole-block-only path. Values 1 through 6 enable
+	// the bounded selective B_PRED search.
 	Method int
 }
 

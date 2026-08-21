@@ -28,10 +28,11 @@
 //
 // This release codes opaque images only. Encode returns
 // ErrAlphaUnsupported for an image with a translucent pixel, so no
-// pipeline can lose a mask without noticing. Every macroblock uses one of
-// the four whole-block luma prediction modes and one of the four chroma
-// modes. The 4x4 sub-modes, the rate-distortion mode search, and the
-// two-pass probability optimization arrive in later releases.
+// pipeline can lose a mask without noticing. The encoder searches the four
+// whole-block luma modes and four chroma modes. At method 1 and above it also
+// trials the ten 4x4 luma predictors on detailed macroblocks and retains only
+// conservative reconstruction-and-sparsity wins. Exact rate-distortion costs
+// and two-pass probability optimization arrive in later releases.
 package webp
 
 import (
@@ -61,10 +62,10 @@ type Options struct {
 	// bytes and always keeps more detail. A zero Quality means
 	// DefaultQuality, which makes the zero value of Options useful.
 	Quality int
-	// Method selects the effort level, from 0, the fastest, to 6, the
-	// slowest and best. This release implements one effort level and
-	// accepts every value in the range, so callers never have to change
-	// the call when later releases add the rest.
+	// Method selects the effort level from 0 through 6. A zero value means
+	// DefaultMethod for historical zero-value compatibility. Values 1 through
+	// 6 currently enable the same bounded selective 4x4 luma search; later
+	// work will assign additional observable search to the higher values.
 	Method int
 }
 

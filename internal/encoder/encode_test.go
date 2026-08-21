@@ -31,7 +31,7 @@ func TestExactReconstruction(t *testing.T) {
 	for _, img := range images {
 		for _, q := range exactGateQualities {
 			t.Run(fmt.Sprintf("%s/q%d", img.Spec.Name, q), func(t *testing.T) {
-				data, recon, err := encodeWithReconstruction(img.Img, Config{Quality: q})
+				data, recon, err := encodeWithReconstruction(img.Img, Config{Quality: q, Method: 4})
 				if err != nil {
 					t.Fatalf("encode: %v", err)
 				}
@@ -54,7 +54,7 @@ func TestRoundTripDecodes(t *testing.T) {
 	for _, img := range images {
 		for _, q := range []int{1, 25, 50, 75, 95, 100} {
 			var buf bytes.Buffer
-			if err := Encode(&buf, img.Img, Config{Quality: q}); err != nil {
+			if err := Encode(&buf, img.Img, Config{Quality: q, Method: 4}); err != nil {
 				t.Fatalf("%s q%d: encode: %v", img.Spec.Name, q, err)
 			}
 			decoded, err := oracle.DecodeWebP(buf.Bytes())
@@ -92,7 +92,7 @@ func TestQualityIsMonotone(t *testing.T) {
 		var lastPSNR float64
 		for i, q := range qualities {
 			var buf bytes.Buffer
-			if err := Encode(&buf, img.Img, Config{Quality: q}); err != nil {
+			if err := Encode(&buf, img.Img, Config{Quality: q, Method: 4}); err != nil {
 				t.Fatalf("%s q%d: encode: %v", img.Spec.Name, q, err)
 			}
 			psnr := codedLumaPSNR(t, img.Img, buf.Bytes())
@@ -118,7 +118,7 @@ func TestDeterminism(t *testing.T) {
 
 	encode := func() []byte {
 		var buf bytes.Buffer
-		if err := Encode(&buf, img, Config{Quality: 68}); err != nil {
+		if err := Encode(&buf, img, Config{Quality: 68, Method: 4}); err != nil {
 			t.Fatalf("encode: %v", err)
 		}
 		return buf.Bytes()
@@ -156,7 +156,7 @@ func TestEdgeSizes(t *testing.T) {
 			img.Pix[i+3] = 0xff
 		}
 
-		data, recon, err := encodeWithReconstruction(img, Config{Quality: 80})
+		data, recon, err := encodeWithReconstruction(img, Config{Quality: 80, Method: 4})
 		if err != nil {
 			t.Fatalf("%dx%d: encode: %v", w, h, err)
 		}
@@ -182,7 +182,7 @@ func TestFlatImageStaysFlat(t *testing.T) {
 		img.Pix[i+0], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = 30, 140, 220, 0xff
 	}
 	var buf bytes.Buffer
-	if err := Encode(&buf, img, Config{Quality: 90}); err != nil {
+	if err := Encode(&buf, img, Config{Quality: 90, Method: 4}); err != nil {
 		t.Fatalf("encode: %v", err)
 	}
 	decoded, err := oracle.DecodeWebP(buf.Bytes())
@@ -223,7 +223,7 @@ func FuzzEncode(f *testing.F) {
 			img.Pix[i+3] = 0xff
 		}
 
-		data, recon, err := encodeWithReconstruction(img, Config{Quality: quality})
+		data, recon, err := encodeWithReconstruction(img, Config{Quality: quality, Method: 4})
 		if err != nil {
 			t.Fatalf("%dx%d q%d: encode: %v", w, h, quality, err)
 		}

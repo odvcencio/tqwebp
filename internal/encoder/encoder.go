@@ -44,6 +44,18 @@ const (
 	biasDenominator = 8
 )
 
+// Method 1 is the first effort tier that spends work on 4x4 luma search.
+// The constants below are intentionally conservative until the exact
+// fixed-point bit-cost and lambda model lands in the next WP-2 slice.
+const (
+	bPredMinMethod                 = 1
+	bPredMinImprovementNumerator   = 1
+	bPredMinImprovementDenominator = 8
+	bPredPenaltyDivisor            = 4
+	bPredTrialPenaltyMultiplier    = 32
+	bPredMinCoefficientReduction   = 8
+)
+
 // macroblock holds everything the serializer needs about one macroblock.
 // The analysis pass fills it; the serialization pass reads it. Two passes
 // exist because the skip probability in the frame header depends on how
@@ -134,15 +146,16 @@ func (e *encoder) encodeMacroblock(mbx, mby int) {
 	mbIndex := mby*e.mbw + mbx
 	mb := &e.mbs[mbIndex]
 
-	if !mb.useBPred {
-		e.chooseLumaMode(mbx, mby, mb)
-	}
-	e.chooseChromaMode(mbx, mby, mb)
-
 	if mb.useBPred {
-		e.codeBPredLuma(mbx, mby, mbIndex, mb)
+		e.chooseChromaMode(mbx, mby, mb)
+		e.codeBPredLuma(mbx, mby, mb, &e.bPredModes[mbIndex], false)
 	} else {
+		wholePredictionSSE := e.chooseLumaMode(mbx, mby, mb)
+		e.chooseChromaMode(mbx, mby, mb)
 		e.codeLuma(mbx, mby, mb)
+		if e.cfg.Method >= bPredMinMethod && e.shouldTrialBPred(wholePredictionSSE) {
+			e.tryBPredLuma(mbx, mby, mbIndex, mb)
+		}
 	}
 	e.codeChroma(mbx, mby, mb)
 
@@ -167,7 +180,7 @@ func (e *encoder) setBPredModes(mbIndex int, modes [16]predict.BMode) {
 
 // chooseLumaMode picks the whole-block luma mode with the smallest sum of
 // squared errors against the source, and leaves its predictor in bestY.
-func (e *encoder) chooseLumaMode(mbx, mby int, mb *macroblock) {
+func (e *encoder) chooseLumaMode(mbx, mby int, mb *macroblock) int32 {
 	nb := e.neighbors(&e.nbY, e.rec.Y, e.rec.YStride, mbx*16, mby*16, 16, mbx > 0, mby > 0)
 	src := e.src.Y[(mby*16)*e.src.YStride+mbx*16:]
 
@@ -181,6 +194,7 @@ func (e *encoder) chooseLumaMode(mbx, mby int, mb *macroblock) {
 			copy(e.bestY[:], e.predY[:])
 		}
 	}
+	return best
 }
 
 // chooseChromaMode picks one mode for both chroma planes, because the
@@ -258,27 +272,135 @@ func (e *encoder) codeLuma(mbx, mby int, mb *macroblock) {
 	}
 }
 
+// tryBPredLuma compares one searched B_PRED candidate with the already-coded
+// whole-block candidate. A rejection restores both the macroblock record and
+// its exact reconstruction, and therefore leaves no B_PRED allocation or
+// syntax footprint behind.
+func (e *encoder) tryBPredLuma(mbx, mby, mbIndex int, mb *macroblock) {
+	wholeDistortion := e.lumaMacroblockSSE(mbx, mby)
+	penalty := e.bPredPenalty()
+	if int64(wholeDistortion) <= penalty {
+		return
+	}
+
+	wholeMB := *mb
+	var wholeRecon [16 * 16]uint8
+	copyLuma16(wholeRecon[:], 16, 0, 0, e.rec.Y, e.rec.YStride, mbx*16, mby*16)
+
+	candidate := wholeMB
+	var modes [16]predict.BMode
+	e.codeBPredLuma(mbx, mby, &candidate, &modes, true)
+	bPredDistortion := e.lumaMacroblockSSE(mbx, mby)
+	wholeCoefficients := lumaCoefficientCount(&wholeMB)
+	bPredCoefficients := lumaCoefficientCount(&candidate)
+	if !admitBPred(wholeDistortion, bPredDistortion, penalty, wholeCoefficients, bPredCoefficients) {
+		*mb = wholeMB
+		copyLuma16(e.rec.Y, e.rec.YStride, mbx*16, mby*16, wholeRecon[:], 16, 0, 0)
+		return
+	}
+
+	*mb = candidate
+	e.setBPredModes(mbIndex, modes)
+}
+
+// admitBPred applies the provisional Method-1 admission policy. It requires
+// a quantizer-scaled absolute distortion win, a one-eighth relative win, and
+// enough retired coefficients to conservatively pay for sixteen submodes.
+// Slice 3's exact fixed-point bit cost and lambda replace this proxy.
+func admitBPred(wholeDistortion, bPredDistortion int32, penalty int64, wholeCoefficients, bPredCoefficients int) bool {
+	improvement := int64(wholeDistortion) - int64(bPredDistortion)
+	minRatioImprovement := int64(wholeDistortion) * bPredMinImprovementNumerator / bPredMinImprovementDenominator
+	return improvement > penalty &&
+		improvement > minRatioImprovement &&
+		bPredCoefficients+bPredMinCoefficientReduction <= wholeCoefficients
+}
+
+// lumaCoefficientCount counts the quantized Y2 and Y1 levels that are not
+// zero. It is a deliberately coarse rate proxy, not a claim about exact bits.
+func lumaCoefficientCount(mb *macroblock) int {
+	count := 0
+	for block := blockY2; block < blockLuma+16; block++ {
+		for _, level := range mb.levels[block] {
+			if level != 0 {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+// shouldTrialBPred prunes smooth macroblocks before the ten-mode subblock
+// search. Prediction error is only a detail signal here; final admission uses
+// decoder-equivalent reconstructed distortion.
+func (e *encoder) shouldTrialBPred(wholePredictionSSE int32) bool {
+	return int64(wholePredictionSSE) > e.bPredPenalty()*bPredTrialPenaltyMultiplier
+}
+
+// bPredPenalty is a deterministic quantizer-scaled proxy for the extra mode
+// and coefficient syntax of B_PRED. It is deliberately conservative. The
+// exact boolean/token cost and lambda replace this proxy in the next slice.
+func (e *encoder) bPredPenalty() int64 {
+	step := int64(e.q.Y1.AC)
+	penalty := step * step / bPredPenaltyDivisor
+	if penalty < 1 {
+		return 1
+	}
+	return penalty
+}
+
+// lumaMacroblockSSE measures the picture a decoder reconstructs, including
+// the padded samples VP8 uses at odd image boundaries.
+func (e *encoder) lumaMacroblockSSE(mbx, mby int) int32 {
+	x0, y0 := mbx*16, mby*16
+	return blockdsp.SSE16x16(
+		e.src.Y[y0*e.src.YStride+x0:], e.src.YStride,
+		e.rec.Y[y0*e.rec.YStride+x0:], e.rec.YStride,
+	)
+}
+
+// copyLuma16 copies one padded 16x16 luma macroblock between planes.
+func copyLuma16(dst []uint8, dstStride, dstX, dstY int, src []uint8, srcStride, srcX, srcY int) {
+	for y := 0; y < 16; y++ {
+		copy(dst[(dstY+y)*dstStride+dstX:(dstY+y)*dstStride+dstX+16], src[(srcY+y)*srcStride+srcX:(srcY+y)*srcStride+srcX+16])
+	}
+}
+
 // codeBPredLuma predicts, transforms, quantizes, and reconstructs the sixteen
 // luma blocks of a B_PRED macroblock in decoder raster order. Each predictor
-// sees the quantized reconstruction of every block above and to its left. A
-// B_PRED block carries its own direct-current coefficient, so this path omits
-// Y2 and codes every luma block from scan position zero.
-func (e *encoder) codeBPredLuma(mbx, mby, mbIndex int, mb *macroblock) {
+// sees the quantized reconstruction of every block above and to its left. When
+// search is true, it chooses the smallest prediction SSE with stable BMode
+// ordering as the tie-break. A B_PRED block carries its own direct-current
+// coefficient, so this path omits Y2 and codes from scan position zero.
+func (e *encoder) codeBPredLuma(mbx, mby int, mb *macroblock, modes *[16]predict.BMode, search bool) {
 	mb.levels[blockY2] = [16]int16{}
 	mb.nz[blockY2] = false
 
-	modes := &e.bPredModes[mbIndex]
-	var pred [16]uint8
+	var pred, bestPred [16]uint8
 	for b := 0; b < 16; b++ {
 		bx, by := (b%4)*4, (b/4)*4
 		x0, y0 := mbx*16+bx, mby*16+by
 
 		nb := predict.BNeighborsForBlock(e.rec.Y, e.rec.YStride, e.mbw, mbx, mby, b)
-		predict.Predict4(pred[:], 4, modes[b], &nb)
+		src := e.src.Y[y0*e.src.YStride+x0:]
+		if search {
+			bestSSE := int32(-1)
+			for mode := predict.BMode(0); mode < predict.NumBModes; mode++ {
+				predict.Predict4(pred[:], 4, mode, &nb)
+				sse := blockdsp.SSE4x4(src, e.src.YStride, pred[:], 4)
+				if bestSSE < 0 || sse < bestSSE {
+					bestSSE = sse
+					modes[b] = mode
+					bestPred = pred
+				}
+			}
+			pred = bestPred
+		} else {
+			predict.Predict4(pred[:], 4, modes[b], &nb)
+		}
 
 		var residual [16]int16
 		for y := 0; y < 4; y++ {
-			srcRow := e.src.Y[(y0+y)*e.src.YStride+x0:]
+			srcRow := src[y*e.src.YStride:]
 			predRow := pred[y*4 : y*4+4]
 			for x := 0; x < 4; x++ {
 				residual[y*4+x] = int16(srcRow[x]) - int16(predRow[x])
