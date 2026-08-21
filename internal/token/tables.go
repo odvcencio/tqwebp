@@ -26,7 +26,7 @@ const (
 	// UV is a chroma block.
 	UV
 	// YWithDC is a luma block that carries its own direct-current value.
-	// Only B_PRED macroblocks use it, so WP-1 never writes it.
+	// B_PRED macroblocks use it and start coding at coefficient zero.
 	YWithDC
 	// NumPlanes counts the planes above.
 	NumPlanes

@@ -49,9 +49,13 @@ const (
 // exist because the skip probability in the frame header depends on how
 // many macroblocks turn out to be skippable.
 type macroblock struct {
-	yMode  predict.Mode
-	uvMode predict.Mode
-	skip   bool
+	// useBPred selects sixteen 4x4 luma predictors instead of yMode's one
+	// 16x16 predictor. B_PRED macroblocks carry their own luma DC
+	// coefficients and therefore never carry a Y2 block.
+	useBPred bool
+	yMode    predict.Mode
+	uvMode   predict.Mode
+	skip     bool
 	// levels holds quantized coefficient levels in scan order.
 	levels [numBlocks][16]int16
 	// nz marks the blocks that carry at least one coefficient. The token
@@ -68,6 +72,11 @@ type encoder struct {
 	mbw int
 	mbh int
 	mbs []macroblock
+
+	// bPredModes is allocated only when at least one macroblock actually
+	// selects B_PRED. Keeping the sixteen modes out of macroblock preserves
+	// the whole-block-only path's macroblock-slice allocation size.
+	bPredModes [][16]predict.BMode
 
 	// filterLevel is the loop filter strength the frame header signals.
 	// It stays at 0 in this release: the encoder does not model the
@@ -122,12 +131,19 @@ func (e *encoder) run() {
 // encodeMacroblock chooses the prediction modes, codes the residual, and
 // writes the reconstruction back into the recon planes.
 func (e *encoder) encodeMacroblock(mbx, mby int) {
-	mb := &e.mbs[mby*e.mbw+mbx]
+	mbIndex := mby*e.mbw + mbx
+	mb := &e.mbs[mbIndex]
 
-	e.chooseLumaMode(mbx, mby, mb)
+	if !mb.useBPred {
+		e.chooseLumaMode(mbx, mby, mb)
+	}
 	e.chooseChromaMode(mbx, mby, mb)
 
-	e.codeLuma(mbx, mby, mb)
+	if mb.useBPred {
+		e.codeBPredLuma(mbx, mby, mbIndex, mb)
+	} else {
+		e.codeLuma(mbx, mby, mb)
+	}
 	e.codeChroma(mbx, mby, mb)
 
 	mb.skip = true
@@ -137,6 +153,16 @@ func (e *encoder) encodeMacroblock(mbx, mby int) {
 			break
 		}
 	}
+}
+
+// setBPredModes records one complete B_PRED decision while preserving a nil
+// mode plane for frames that stay on the whole-block path.
+func (e *encoder) setBPredModes(mbIndex int, modes [16]predict.BMode) {
+	if e.bPredModes == nil {
+		e.bPredModes = make([][16]predict.BMode, len(e.mbs))
+	}
+	e.mbs[mbIndex].useBPred = true
+	e.bPredModes[mbIndex] = modes
 }
 
 // chooseLumaMode picks the whole-block luma mode with the smallest sum of
@@ -229,6 +255,44 @@ func (e *encoder) codeLuma(mbx, mby int, mb *macroblock) {
 
 		bx, by := (b%4)*4, (b/4)*4
 		e.reconstruct(e.rec.Y, e.rec.YStride, mbx*16+bx, mby*16+by, e.bestY[:], 16, bx, by, &residual)
+	}
+}
+
+// codeBPredLuma predicts, transforms, quantizes, and reconstructs the sixteen
+// luma blocks of a B_PRED macroblock in decoder raster order. Each predictor
+// sees the quantized reconstruction of every block above and to its left. A
+// B_PRED block carries its own direct-current coefficient, so this path omits
+// Y2 and codes every luma block from scan position zero.
+func (e *encoder) codeBPredLuma(mbx, mby, mbIndex int, mb *macroblock) {
+	mb.levels[blockY2] = [16]int16{}
+	mb.nz[blockY2] = false
+
+	modes := &e.bPredModes[mbIndex]
+	var pred [16]uint8
+	for b := 0; b < 16; b++ {
+		bx, by := (b%4)*4, (b/4)*4
+		x0, y0 := mbx*16+bx, mby*16+by
+
+		nb := predict.BNeighborsForBlock(e.rec.Y, e.rec.YStride, e.mbw, mbx, mby, b)
+		predict.Predict4(pred[:], 4, modes[b], &nb)
+
+		var residual [16]int16
+		for y := 0; y < 4; y++ {
+			srcRow := e.src.Y[(y0+y)*e.src.YStride+x0:]
+			predRow := pred[y*4 : y*4+4]
+			for x := 0; x < 4; x++ {
+				residual[y*4+x] = int16(srcRow[x]) - int16(predRow[x])
+			}
+		}
+
+		coeff := blockdsp.FDCT4x4(&residual)
+		levels := quantizeBlock(&coeff, e.q.Y1)
+		mb.levels[blockLuma+b] = toScanOrder(&levels)
+		mb.nz[blockLuma+b] = anyNonZero(&levels, 0)
+
+		dequant := blockdsp.DequantizeBlock(&levels, e.q.Y1.DC, e.q.Y1.AC)
+		residualOut := blockdsp.IDCT4x4(&dequant)
+		e.reconstruct(e.rec.Y, e.rec.YStride, x0, y0, pred[:], 4, 0, 0, &residualOut)
 	}
 }
 
@@ -435,11 +499,32 @@ func (e *encoder) frameBytes() ([]byte, error) {
 		QuantIndex:      int(e.q.Index),
 		SkipProb:        skipProb,
 	})
-	for i := range e.mbs {
-		mb := &e.mbs[i]
-		first.WriteBool(skipProb, mb.skip)
-		writeLumaMode(first, mb.yMode)
-		writeChromaMode(first, mb.uvMode)
+	// Whole-block-only frames do not need the 4x4 context workspace, so they
+	// incur no additional per-frame context allocation.
+	var aboveModes [][4]predict.BMode
+	if e.bPredModes != nil {
+		aboveModes = make([][4]predict.BMode, e.mbw)
+	}
+	for mby := 0; mby < e.mbh; mby++ {
+		var leftModes [4]predict.BMode
+		for mbx := 0; mbx < e.mbw; mbx++ {
+			mb := &e.mbs[mby*e.mbw+mbx]
+			mbIndex := mby*e.mbw + mbx
+			first.WriteBool(skipProb, mb.skip)
+			if mb.useBPred {
+				writeBPredLumaMode(first, &e.bPredModes[mbIndex], &aboveModes[mbx], &leftModes)
+			} else {
+				writeLumaMode(first, mb.yMode)
+				if aboveModes != nil {
+					contextMode := bModeForLumaMode(mb.yMode)
+					for i := 0; i < 4; i++ {
+						aboveModes[mbx][i] = contextMode
+						leftModes[i] = contextMode
+					}
+				}
+			}
+			writeChromaMode(first, mb.uvMode)
+		}
 	}
 
 	tokens := e.writeTokens()

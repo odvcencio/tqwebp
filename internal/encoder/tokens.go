@@ -10,8 +10,8 @@ import (
 // fixed for a key frame: no frame header field can change them.
 const (
 	// use16x16Prob gates the choice between a whole-block luma mode and
-	// the 4x4 sub-mode set. This release always takes the whole-block
-	// branch, which the decoder reads as a one.
+	// the 4x4 sub-mode set. The public path still takes the whole-block
+	// branch; the B_PRED integration harness also exercises the zero branch.
 	use16x16Prob = 145
 
 	lumaDCvsRestProb = 156
@@ -98,29 +98,35 @@ func (e *encoder) writeTokens() []byte {
 			up := &above[mbx]
 
 			if mb.skip {
-				// A skipped macroblock codes nothing, and the decoder
-				// clears both contexts. Its blocks are all empty, so
-				// clearing matches what the blocks would have said.
-				left = mbContext{}
-				*up = mbContext{}
+				// A skipped macroblock codes no coefficient tokens. The
+				// decoder clears its ordinary luma and chroma contexts. It
+				// clears the separate Y2 context only for a 16x16-predicted
+				// macroblock; a B_PRED macroblock has no Y2 syntax and leaves
+				// that state untouched.
+				if !mb.useBPred {
+					left.y2 = 0
+					up.y2 = 0
+				}
+				clearBlockContexts(&left)
+				clearBlockContexts(up)
 				continue
 			}
 
-			// The Walsh-Hadamard block comes first.
-			nz := btou(w.WriteBlock(token.Y2, int(left.y2+up.y2), 0, &mb.levels[blockY2]))
-			left.y2, up.y2 = nz, nz
+			if mb.useBPred {
+				// B_PRED has no Walsh-Hadamard block. Every luma block
+				// carries its own direct-current value and starts at scan
+				// position zero. The independent Y2 contexts remain exactly
+				// as the preceding 16x16 macroblocks left them.
+				e.writeLumaTokens(w, mb, token.YWithDC, 0, &left.luma, &up.luma)
+			} else {
+				// A 16x16-predicted macroblock writes the Walsh-Hadamard
+				// block first.
+				nz := btou(w.WriteBlock(token.Y2, int(left.y2+up.y2), 0, &mb.levels[blockY2]))
+				left.y2, up.y2 = nz, nz
 
-			// Then the sixteen luma blocks, in raster order. Each one
-			// starts at coefficient 1, because its direct-current value
-			// travelled in the block above.
-			for y := 0; y < 4; y++ {
-				nz := left.luma[y]
-				for x := 0; x < 4; x++ {
-					ctx := int(nz + up.luma[x])
-					nz = btou(w.WriteBlock(token.YAfterY2, ctx, 1, &mb.levels[blockLuma+4*y+x]))
-					up.luma[x] = nz
-				}
-				left.luma[y] = nz
+				// Its sixteen luma blocks begin at coefficient 1, because
+				// their direct-current values travelled through Y2.
+				e.writeLumaTokens(w, mb, token.YAfterY2, 1, &left.luma, &up.luma)
 			}
 
 			// Then the two chroma planes, four blocks each.
@@ -129,6 +135,29 @@ func (e *encoder) writeTokens() []byte {
 		}
 	}
 	return enc.Finish()
+}
+
+// writeLumaTokens codes the sixteen luma blocks of one macroblock and updates
+// the ordinary luma neighbour contexts. plane and first distinguish the
+// B_PRED path (YWithDC, 0) from the 16x16 path (YAfterY2, 1).
+func (e *encoder) writeLumaTokens(w *token.Writer, mb *macroblock, plane, first int, left, up *[4]uint8) {
+	for y := 0; y < 4; y++ {
+		nz := left[y]
+		for x := 0; x < 4; x++ {
+			ctx := int(nz + up[x])
+			nz = btou(w.WriteBlock(plane, ctx, first, &mb.levels[blockLuma+4*y+x]))
+			up[x] = nz
+		}
+		left[y] = nz
+	}
+}
+
+// clearBlockContexts clears the coefficient contexts shared by every
+// macroblock type while deliberately retaining c.y2.
+func clearBlockContexts(c *mbContext) {
+	c.luma = [4]uint8{}
+	c.u = [2]uint8{}
+	c.v = [2]uint8{}
 }
 
 // writeChromaTokens codes the four blocks of one chroma plane and updates
