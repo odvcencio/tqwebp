@@ -28,10 +28,20 @@
 //
 // This release codes opaque images only. Encode returns
 // ErrAlphaUnsupported for an image with a translucent pixel, so no
-// pipeline can lose a mask without noticing. Every macroblock uses one of
-// the four whole-block luma prediction modes and one of the four chroma
-// modes. The 4x4 sub-modes, the rate-distortion mode search, and the
-// two-pass probability optimization arrive in later releases.
+// pipeline can lose a mask without noticing.
+//
+// # Effort levels
+//
+// Method runs from 0 to 6. Methods 0 to 4 implement one effort level:
+// every macroblock's luma uses one of the four whole-block prediction
+// modes and one of the four chroma modes. Method 5 and 6 add a
+// conservative detailed-block pass: a macroblock whose luma the whole-
+// block modes fit poorly may be coded as sixteen independent 4x4 blocks
+// instead, but only when the candidate's sum-of-squares error is
+// strictly below half of the whole-block error. That margin is a fixed,
+// bounded proxy chosen so the selector stays conservative without a bit
+// model; the exact rate-distortion mode search and the two-pass
+// probability optimization arrive in later releases.
 package webp
 
 import (
@@ -62,9 +72,10 @@ type Options struct {
 	// DefaultQuality, which makes the zero value of Options useful.
 	Quality int
 	// Method selects the effort level, from 0, the fastest, to 6, the
-	// slowest and best. This release implements one effort level and
-	// accepts every value in the range, so callers never have to change
-	// the call when later releases add the rest.
+	// slowest and best. Methods 0 to 4 share one effort level. At 5
+	// and 6 a conservative detailed-block pass may code selected
+	// macroblocks' luma as sixteen 4x4 blocks; see the Effort levels
+	// section above.
 	Method int
 }
 

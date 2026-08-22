@@ -51,6 +51,16 @@ both mean quality 75 and method 4. Quality 75 lands within 0.02 dB of
 libwebp's quality 75 on the photo corpus, so the knob means what a caller
 who knows `cwebp` expects it to mean.
 
+The `Method` knob now carries one implemented distinction. Methods 0 to 4
+share a single effort level: every macroblock's luma uses one of the four
+whole-block prediction modes. Methods 5 and 6 add a conservative
+detailed-block pass that may code a macroblock's luma as sixteen 4x4
+blocks instead, but only when the candidate's sum-of-squares error is
+strictly below half of what the best whole-block mode left. The rule is
+an error-only proxy with a fixed margin -- it prices no bits, so it is
+not a rate-distortion search -- and methods below 5 never run it, so
+their output stays byte for byte what earlier releases wrote.
+
 Encode refuses an image with a translucent pixel and returns
 `ErrAlphaUnsupported`. Alpha arrives with work package 5, and refusing is
 the only way a pipeline cannot lose a mask in silence.

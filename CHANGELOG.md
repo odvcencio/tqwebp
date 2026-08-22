@@ -2,6 +2,20 @@
 
 All notable changes to tqwebp are documented in this file.
 
+## Unreleased: work package 2 — better modes
+
+### Added
+
+- `internal/encoder`: a conservative detailed-block selector for the
+  B_PRED luma path, available only at `Method` 5 and 6. A macroblock
+  whose whole-block prediction fits poorly may be coded as sixteen
+  independent 4x4 blocks, but only when the candidate's sum-of-squares
+  error is strictly below half of the whole-block error; otherwise the
+  whole-block record and reconstruction stand unchanged. The rule prices
+  squared error only -- it is not a rate-distortion search -- and
+  methods below 5 never run it, so their output is byte-identical to the
+  previous release.
+
 ## Unreleased: work package 1 — a correct encoder
 
 The encoder exists. It writes a VP8 key frame inside a RIFF container,

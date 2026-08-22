@@ -55,7 +55,9 @@ type macroblock struct {
 	// bpred marks a macroblock whose luma uses the 4x4 sub-mode set
 	// instead of a whole-block mode behind the Walsh-Hadamard transform.
 	// The forced path of work package WP-2 slice 2A sets it for every
-	// macroblock; production selection does not set it yet.
+	// macroblock; production sets it only at Method 5 or above, where
+	// the conservative detailed-block rule of bpred_select.go adopts
+	// the sixteen-block candidate.
 	bpred bool
 	// subModes holds the sixteen raster-ordered 4x4 luma decisions of a
 	// B_PRED macroblock.
@@ -84,9 +86,10 @@ type encoder struct {
 	filterLevel int
 
 	// forceBPred makes every macroblock take the B_PRED luma path of
-	// work package WP-2 slice 2A. It exists so tests can drive the new
-	// path before selection lands; production never sets it, and the
-	// default path stays byte-identical.
+	// work package WP-2 slice 2A, bypassing selection. It exists so
+	// tests can drive the coding path directly; production encodes go
+	// through the Method 5/6 selector of bpred_select.go instead, and
+	// methods below the boundary never leave the whole-block path.
 	forceBPred bool
 
 	// subCtxAbove holds the B_PRED sub-mode contexts the frame header
@@ -153,8 +156,16 @@ func (e *encoder) encodeMacroblock(mbx, mby int) {
 		mb.bpred = true
 		e.codeLumaBPred(mbx, mby, mb)
 	} else {
-		e.chooseLumaMode(mbx, mby, mb)
+		wholeSSE := e.chooseLumaMode(mbx, mby, mb)
 		e.codeLuma(mbx, mby, mb)
+		if e.bPredAllowed() {
+			// WP-2 slice 2B: the tentative sixteen-block pass.
+			// It keeps the whole-block result just coded unless
+			// the detailed-block rule clearly prefers it, and
+			// runs before chroma coding and the skip analysis,
+			// which read the luma state either way.
+			e.tryDetailedLuma(mbx, mby, mb, wholeSSE)
+		}
 	}
 	e.chooseChromaMode(mbx, mby, mb)
 	e.codeChroma(mbx, mby, mb)
@@ -169,8 +180,10 @@ func (e *encoder) encodeMacroblock(mbx, mby int) {
 }
 
 // chooseLumaMode picks the whole-block luma mode with the smallest sum of
-// squared errors against the source, and leaves its predictor in bestY.
-func (e *encoder) chooseLumaMode(mbx, mby int, mb *macroblock) {
+// squared errors against the source, leaves its predictor in bestY, and
+// returns that smallest sum. bpred_select.go's detailed-block rule uses
+// it as the score the sixteen-block candidate must clearly beat.
+func (e *encoder) chooseLumaMode(mbx, mby int, mb *macroblock) int64 {
 	nb := e.neighbors(&e.nbY, e.rec.Y, e.rec.YStride, mbx*16, mby*16, 16, mbx > 0, mby > 0)
 	src := e.src.Y[(mby*16)*e.src.YStride+mbx*16:]
 
@@ -184,6 +197,7 @@ func (e *encoder) chooseLumaMode(mbx, mby int, mb *macroblock) {
 			copy(e.bestY[:], e.predY[:])
 		}
 	}
+	return int64(best)
 }
 
 // chooseChromaMode picks one mode for both chroma planes, because the

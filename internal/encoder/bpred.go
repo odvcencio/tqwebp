@@ -7,13 +7,13 @@ import (
 	"m31labs.dev/tqwebp/internal/predict"
 )
 
-// This file is work package WP-2 slice 2A: the forced B_PRED macroblock
-// path. Every macroblock an encoder with forceBPred set codes its luma as
-// sixteen independent 4x4 blocks -- RFC 6386 chapter 12's intra 4x4
-// predictions -- instead of one 16x16 block behind a Walsh-Hadamard
-// transform. Nothing here chooses between B_PRED and the whole-block
-// modes yet: production selection keeps walking the four whole-block
-// modes, and this file runs only when the caller forces it on.
+// This file is work package WP-2 slice 2A: the B_PRED macroblock coding
+// path, which codes one macroblock's luma as sixteen independent 4x4
+// blocks -- RFC 6386 chapter 12's intra 4x4 predictions -- instead of one
+// 16x16 block behind a Walsh-Hadamard transform. Slice 2A ran it only
+// when a test forced it on; slice 2B also calls it as the tentative
+// candidate of the conservative selector in bpred_select.go, which keeps
+// the result only when the detailed-block rule clearly prefers it.
 //
 // The rules mirror what a decoder does, because the repository's
 // exact-match gate compares the encoder's picture with
@@ -35,11 +35,17 @@ import (
 // smallest sum of squared errors against the source, transforms and
 // quantizes the residual without a Y2 detour, and writes the
 // reconstruction back before the next block reads its neighbours.
-func (e *encoder) codeLumaBPred(mbx, mby int, mb *macroblock) {
+//
+// It returns the total of the sixteen winning sub-mode sums of squared
+// errors, measured before quantization. The selector in bpred_select.go
+// compares that total with the whole-block error; the forced path of the
+// tests ignores it.
+func (e *encoder) codeLumaBPred(mbx, mby int, mb *macroblock) int64 {
 	paddedWidth := ((e.src.Width + 15) / 16) * 16
 
 	var nb predict.SubNeighbors
 	var pred [16]uint8
+	var totalSSE int64
 
 	for b := 0; b < 16; b++ {
 		x0, y0 := mbx*16+(b%4)*4, mby*16+(b/4)*4
@@ -58,6 +64,7 @@ func (e *encoder) codeLumaBPred(mbx, mby int, mb *macroblock) {
 				best = m
 			}
 		}
+		totalSSE += int64(bestSSE)
 		mb.subModes[b] = best
 		predict.PredictSub(pred[:], 4, best, &nb)
 
@@ -84,6 +91,7 @@ func (e *encoder) codeLumaBPred(mbx, mby int, mb *macroblock) {
 	// the skip analysis sees nothing extra.
 	mb.levels[blockY2] = [16]int16{}
 	mb.nz[blockY2] = false
+	return totalSSE
 }
 
 // writeBPredModes writes one B_PRED macroblock's luma record: the
