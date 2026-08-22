@@ -204,12 +204,32 @@ type tokCtx struct {
 // replayFrame parses one encoded frame end to end. It fails t unless the
 // stream, the encoder's records, and the internal/cost model agree
 // everywhere, and it returns nothing: all evidence is in the failures it
-// refuses to produce.
+// refuses to produce. The walk splits across cohesive helpers: the
+// container layout (framePartitions), the frame header (replayHeader),
+// the per-macroblock prediction records (replayMacroblocks), and the
+// token partition (replayTokens).
 func replayFrame(t *testing.T, enc *encoder, data []byte) {
 	t.Helper()
 
-	// The file is a RIFF container: 12-byte RIFF/WEBP header, then a
-	// "VP8 " chunk header carrying the payload length.
+	fp, tp := framePartitions(t, data)
+
+	var stream acc // reference price of everything the streams carry
+	dec := boolenc.NewDecoder(fp)
+	skipProb, model := replayHeader(t, &stream, dec, enc)
+	model += replayMacroblocks(t, &stream, dec, enc, skipProb)
+
+	if got := stream.total; got != int64(model) {
+		t.Fatalf("first partition: stream prices %d, cost model charges %d", got, int64(model))
+	}
+	checkPartitionZeroBytes(t, model, len(fp))
+
+	replayTokens(t, enc, tp)
+}
+
+// framePartitions splits the encoded file into the first partition and
+// the token partition. The file is a RIFF container: 12-byte RIFF/WEBP
+// header, then a "VP8 " chunk header carrying the payload length.
+func framePartitions(t *testing.T, data []byte) (fp, tp []byte) {
 	if string(data[0:4]) != "RIFF" || string(data[8:12]) != "WEBP" || string(data[12:16]) != "VP8 " {
 		t.Fatal("file does not carry the simple lossy RIFF layout the tests assume")
 	}
@@ -217,14 +237,13 @@ func replayFrame(t *testing.T, enc *encoder, data []byte) {
 	frame := data[20 : 20+payloadLen]
 
 	size := uint32(frame[0]>>5)&7 | uint32(frame[1])<<3 | uint32(frame[2])<<11
-	fp := frame[10 : 10+size]
-	tp := frame[10+size:]
+	return frame[10 : 10+size], frame[10+size:]
+}
 
-	var stream acc // reference price of everything the streams carry
-	dec := boolenc.NewDecoder(fp)
-
-	// --- Frame header, mirroring frame.WriteHeader ---
-	a := &stream
+// replayHeader walks the frame header, mirroring frame.WriteHeader, and
+// asserts every parsed field against the encoder's own state. It returns
+// the signalled skip probability and the header's model price.
+func replayHeader(t *testing.T, a *acc, dec *boolenc.Decoder, enc *encoder) (skipProb uint8, model cost.Cost) {
 	a.d(dec, 128) // colour space
 	a.d(dec, 128) // clamping type
 	if seg := a.d(dec, 128); seg {
@@ -244,30 +263,46 @@ func replayFrame(t *testing.T, enc *encoder, data []byte) {
 	if refresh := a.d(dec, 128); !refresh {
 		t.Fatal("key frame must signal probability refresh")
 	}
-	updateDecisions := 0
+	if updates := replayProbUpdates(a, dec); updates != 0 {
+		t.Fatalf("%d probability updates in a defaults-only frame", updates)
+	}
+	if inUse := a.d(dec, 128); !inUse {
+		t.Fatal("skip flag must be signalled in use")
+	}
+	skipProb = uint8(a.lit(dec, 8))
+
+	// Header model: the same decisions priced by the public API.
+	model = cost.PlainBit*12 /* fixed flags */ +
+		cost.Literal(6+3+2+7+8) /* literals incl. skip prob */ +
+		probUpdateModelCost()
+
+	assertHeaderFields(t, enc, filterSimple, filterLevel, sharpness, quantIndex, skipProb)
+	return skipProb, model
+}
+
+// replayProbUpdates reads the coefficient-probability update grid and
+// returns how many updates the stream actually carried.
+func replayProbUpdates(a *acc, dec *boolenc.Decoder) int {
+	updates := 0
 	for i := 0; i < token.NumPlanes; i++ {
 		for j := 0; j < token.NumBands; j++ {
 			for k := 0; k < token.NumContexts; k++ {
 				for l := 0; l < token.NumProbs; l++ {
 					if upd := a.d(dec, token.UpdateProbs[i][j][k][l]); upd {
 						a.lit(dec, 8)
-						updateDecisions++
+						updates++
 					}
 				}
 			}
 		}
 	}
-	if updateDecisions != 0 {
-		t.Fatalf("%d probability updates in a defaults-only frame", updateDecisions)
-	}
-	if inUse := a.d(dec, 128); !inUse {
-		t.Fatal("skip flag must be signalled in use")
-	}
-	skipProb := uint8(a.lit(dec, 8))
+	return updates
+}
 
-	// Header model: the same decisions priced by the public API.
-	model := cost.PlainBit*12 /* fixed flags */ +
-		cost.Literal(6+3+2+7+8) /* literals incl. skip prob */
+// probUpdateModelCost prices the probability-update grid through the
+// public cost API.
+func probUpdateModelCost() cost.Cost {
+	var model cost.Cost
 	for i := 0; i < token.NumPlanes; i++ {
 		for j := 0; j < token.NumBands; j++ {
 			for k := 0; k < token.NumContexts; k++ {
@@ -277,8 +312,12 @@ func replayFrame(t *testing.T, enc *encoder, data []byte) {
 			}
 		}
 	}
+	return model
+}
 
-	// Assert header fields against the encoder's own state.
+// assertHeaderFields checks the parsed header fields against the
+// encoder's own state.
+func assertHeaderFields(t *testing.T, enc *encoder, filterSimple bool, filterLevel, sharpness, quantIndex uint32, skipProb uint8) {
 	if !filterSimple {
 		t.Error("header did not signal the simple filter the encoder writes")
 	}
@@ -294,174 +333,140 @@ func replayFrame(t *testing.T, enc *encoder, data []byte) {
 	if got, want := int(skipProb), int(enc.skipProbability()); got != want {
 		t.Errorf("parsed skip probability %d, encoder signals %d", got, want)
 	}
+}
 
-	// --- Per-macroblock prediction records, mirroring frameBytes ---
+// checkPartitionZeroBytes holds the partition-zero byte estimate within a
+// few percent of the actual first-partition length.
+func checkPartitionZeroBytes(t *testing.T, model cost.Cost, fpLen int) {
+	est := cost.PartitionZeroBytes(model)
+	slack := 8 + fpLen/20
+	if diff := est - fpLen; diff < -slack || diff > slack {
+		t.Errorf("first partition: byte estimate %d vs actual %d (slack %d)", est, fpLen, slack)
+	}
+}
+
+// replayMacroblocks walks every macroblock's prediction record, mirroring
+// frameBytes, and returns the records' model price.
+func replayMacroblocks(t *testing.T, a *acc, dec *boolenc.Decoder, enc *encoder, skipProb uint8) cost.Cost {
 	var leftSub [4]predict.SubMode
 	for i := range enc.subCtxAbove {
 		enc.subCtxAbove[i] = [4]predict.SubMode{}
 	}
+	var model cost.Cost
 	for mby := 0; mby < enc.mbh; mby++ {
 		leftSub = [4]predict.SubMode{}
 		for mbx := 0; mbx < enc.mbw; mbx++ {
 			mb := &enc.mbs[mby*enc.mbw+mbx]
-			aboveSub := &enc.subCtxAbove[mbx]
+			model += replayMacroblock(t, a, dec, mb, &enc.subCtxAbove[mbx], &leftSub, mbx, mby, skipProb)
+		}
+	}
+	return model
+}
 
-			skip := a.d(dec, skipProb)
-			if skip != mb.skip {
-				t.Fatalf("macroblock (%d,%d): parsed skip %v, record says %v", mbx, mby, skip, mb.skip)
-			}
-			model += cost.SkipCost(skipProb, mb.skip)
+// replayMacroblock reads one macroblock's prediction record -- skip flag,
+// luma mode or sixteen sub-modes, chroma mode -- asserting every decision
+// against the encoder's record.
+func replayMacroblock(t *testing.T, a *acc, dec *boolenc.Decoder, mb *macroblock, aboveSub, leftSub *[4]predict.SubMode, mbx, mby int, skipProb uint8) cost.Cost {
+	var model cost.Cost
 
-			if mb.bpred {
-				if flag := a.d(dec, use16x16Prob); flag {
-					t.Fatalf("macroblock (%d,%d): B_PRED record parsed as whole-block", mbx, mby)
-				}
-				model += cost.BPredFlag()
-				for j := 0; j < 4; j++ {
-					for i := 0; i < 4; i++ {
-						got := readSubModeLocal(a, dec, &predict.KeyFrameSubModeProbs[aboveSub[i]][leftSub[j]])
-						if got != mb.subModes[4*j+i] {
-							t.Fatalf("macroblock (%d,%d) block %d: parsed sub-mode %v, record %v",
-								mbx, mby, 4*j+i, got, mb.subModes[4*j+i])
-						}
-						model += cost.SubModeCost(aboveSub[i], leftSub[j], got)
-						aboveSub[i] = got
-						leftSub[j] = got
-					}
-				}
-			} else {
-				if flag := a.d(dec, use16x16Prob); !flag {
-					t.Fatalf("macroblock (%d,%d): whole-block record parsed as B_PRED", mbx, mby)
-				}
-				var m predict.Mode
-				if !a.d(dec, lumaDCvsRestProb) {
-					if !a.d(dec, lumaDCvsVProb) {
-						m = predict.DC
-					} else {
-						m = predict.V
-					}
-				} else {
-					if !a.d(dec, lumaHvsTMProb) {
-						m = predict.H
-					} else {
-						m = predict.TM
-					}
-				}
-				if m != mb.yMode {
-					t.Fatalf("macroblock (%d,%d): parsed luma mode %v, record %v", mbx, mby, m, mb.yMode)
-				}
-				model += cost.LumaMode(m)
-				ctx := subModeContextOf(mb.yMode)
-				for i := range leftSub {
-					aboveSub[i] = ctx
-					leftSub[i] = ctx
-				}
-			}
+	skip := a.d(dec, skipProb)
+	if skip != mb.skip {
+		t.Fatalf("macroblock (%d,%d): parsed skip %v, record says %v", mbx, mby, skip, mb.skip)
+	}
+	model += cost.SkipCost(skipProb, mb.skip)
 
-			var uv predict.Mode
-			if !a.d(dec, chromaDCProb) {
-				uv = predict.DC
-			} else {
-				if !a.d(dec, chromaVProb) {
-					uv = predict.V
-				} else {
-					if !a.d(dec, chromaHProb) {
-						uv = predict.H
-					} else {
-						uv = predict.TM
-					}
-				}
-			}
-			if uv != mb.uvMode {
-				t.Fatalf("macroblock (%d,%d): parsed chroma mode %v, record %v", mbx, mby, uv, mb.uvMode)
-			}
-			model += cost.ChromaMode(uv)
+	if mb.bpred {
+		model += replayBPredSubModes(t, a, dec, mb, aboveSub, leftSub, mbx, mby)
+	} else {
+		if flag := a.d(dec, use16x16Prob); !flag {
+			t.Fatalf("macroblock (%d,%d): whole-block record parsed as B_PRED", mbx, mby)
+		}
+		m := readWholeBlockLumaMode(a, dec)
+		if m != mb.yMode {
+			t.Fatalf("macroblock (%d,%d): parsed luma mode %v, record %v", mbx, mby, m, mb.yMode)
+		}
+		model += cost.LumaMode(m)
+		ctx := subModeContextOf(mb.yMode)
+		for i := range leftSub {
+			aboveSub[i] = ctx
+			leftSub[i] = ctx
 		}
 	}
 
-	if got := stream.total; got != int64(model) {
-		t.Fatalf("first partition: stream prices %d, cost model charges %d", got, int64(model))
+	uv := readChromaMode(a, dec)
+	if uv != mb.uvMode {
+		t.Fatalf("macroblock (%d,%d): parsed chroma mode %v, record %v", mbx, mby, uv, mb.uvMode)
 	}
-	est := cost.PartitionZeroBytes(model)
-	slack := 8 + len(fp)/20
-	if diff := est - len(fp); diff < -slack || diff > slack {
-		t.Errorf("first partition: byte estimate %d vs actual %d (slack %d)", est, len(fp), slack)
-	}
+	model += cost.ChromaMode(uv)
+	return model
+}
 
-	// --- Token partition, mirroring writeTokens ---
+// replayBPredSubModes reads the sixteen sub-modes of a B_PRED macroblock
+// along the RFC tree, updating the neighbouring sub-mode contexts as the
+// serializer does.
+func replayBPredSubModes(t *testing.T, a *acc, dec *boolenc.Decoder, mb *macroblock, aboveSub, leftSub *[4]predict.SubMode, mbx, mby int) cost.Cost {
+	if flag := a.d(dec, use16x16Prob); flag {
+		t.Fatalf("macroblock (%d,%d): B_PRED record parsed as whole-block", mbx, mby)
+	}
+	var model cost.Cost
+	model += cost.BPredFlag()
+	for j := 0; j < 4; j++ {
+		for i := 0; i < 4; i++ {
+			got := readSubModeLocal(a, dec, &predict.KeyFrameSubModeProbs[aboveSub[i]][leftSub[j]])
+			if got != mb.subModes[4*j+i] {
+				t.Fatalf("macroblock (%d,%d) block %d: parsed sub-mode %v, record %v",
+					mbx, mby, 4*j+i, got, mb.subModes[4*j+i])
+			}
+			model += cost.SubModeCost(aboveSub[i], leftSub[j], got)
+			aboveSub[i] = got
+			leftSub[j] = got
+		}
+	}
+	return model
+}
+
+// readWholeBlockLumaMode walks the whole-block luma-mode tree.
+func readWholeBlockLumaMode(a *acc, dec *boolenc.Decoder) predict.Mode {
+	if !a.d(dec, lumaDCvsRestProb) {
+		if !a.d(dec, lumaDCvsVProb) {
+			return predict.DC
+		}
+		return predict.V
+	}
+	if !a.d(dec, lumaHvsTMProb) {
+		return predict.H
+	}
+	return predict.TM
+}
+
+// readChromaMode walks the chroma-mode tree.
+func readChromaMode(a *acc, dec *boolenc.Decoder) predict.Mode {
+	if !a.d(dec, chromaDCProb) {
+		return predict.DC
+	}
+	if !a.d(dec, chromaVProb) {
+		return predict.V
+	}
+	if !a.d(dec, chromaHProb) {
+		return predict.H
+	}
+	return predict.TM
+}
+
+// replayTokens walks the token partition, mirroring writeTokens, and
+// holds the stream's independent price against the cost model's charge
+// for the same records.
+func replayTokens(t *testing.T, enc *encoder, tp []byte) {
 	dec2 := boolenc.NewDecoder(tp)
 	var tokens acc
 	above := make([]tokCtx, enc.mbw)
 	var left tokCtx
 	var modelTokens cost.Cost
-	readPlane := func(plane int, base int, l, u *[2]uint8, mb *macroblock) {
-		for y := 0; y < 2; y++ {
-			nz := l[y]
-			for x := 0; x < 2; x++ {
-				ctx := int(nz) + int(u[x])
-				var levels [16]int16
-				gotNZ := readBlockLocal(&tokens, dec2, plane, ctx, 0, &token.DefaultProbs, &levels)
-				idx := base + 2*y + x
-				if gotNZ != mb.nz[idx] || levels != mb.levels[idx] {
-					t.Fatalf("block %d: parsed levels/nz disagree with the record", idx)
-				}
-				modelTokens += cost.BlockCost(plane, ctx, 0, &mb.levels[idx], &token.DefaultProbs)
-				nz = uint8(btoi(gotNZ))
-				u[x] = nz
-			}
-			l[y] = nz
-		}
-	}
 	for mby := 0; mby < enc.mbh; mby++ {
 		left = tokCtx{}
 		for mbx := 0; mbx < enc.mbw; mbx++ {
 			mb := &enc.mbs[mby*enc.mbw+mbx]
-			up := &above[mbx]
-
-			if mb.skip {
-				prevLeftY2, prevUpY2 := left.y2, up.y2
-				left = tokCtx{}
-				*up = tokCtx{}
-				if mb.bpred {
-					left.y2, up.y2 = prevLeftY2, prevUpY2
-				}
-				continue
-			}
-
-			lumaPlane, lumaFirst := token.YAfterY2, 1
-			if !mb.bpred {
-				ctx := int(left.y2 + up.y2)
-				var levels [16]int16
-				gotNZ := readBlockLocal(&tokens, dec2, token.Y2, ctx, 0, &token.DefaultProbs, &levels)
-				if gotNZ != mb.nz[blockY2] || levels != mb.levels[blockY2] {
-					t.Fatal("Y2 block: parsed levels/nz disagree with the record")
-				}
-				modelTokens += cost.BlockCost(token.Y2, ctx, 0, &mb.levels[blockY2], &token.DefaultProbs)
-				nz := uint8(btoi(gotNZ))
-				left.y2, up.y2 = nz, nz
-			} else {
-				lumaPlane, lumaFirst = token.YWithDC, 0
-			}
-
-			for y := 0; y < 4; y++ {
-				nz := left.luma[y]
-				for x := 0; x < 4; x++ {
-					ctx := int(nz) + int(up.luma[x])
-					var levels [16]int16
-					gotNZ := readBlockLocal(&tokens, dec2, lumaPlane, ctx, lumaFirst, &token.DefaultProbs, &levels)
-					idx := blockLuma + 4*y + x
-					if gotNZ != mb.nz[idx] || levels != mb.levels[idx] {
-						t.Fatalf("luma block %d: parsed levels/nz disagree with the record", idx)
-					}
-					modelTokens += cost.BlockCost(lumaPlane, ctx, lumaFirst, &mb.levels[idx], &token.DefaultProbs)
-					nz = uint8(btoi(gotNZ))
-					up.luma[x] = nz
-				}
-				left.luma[y] = nz
-			}
-
-			readPlane(token.UV, blockU, &left.u, &up.u, mb)
-			readPlane(token.UV, blockV, &left.v, &up.v, mb)
+			modelTokens += replayMacroblockTokens(t, &tokens, dec2, mb, &above[mbx], &left)
 		}
 	}
 	if got := tokens.total; got != int64(modelTokens) {
@@ -470,6 +475,99 @@ func replayFrame(t *testing.T, enc *encoder, data []byte) {
 	if dec2.UnexpectedEOF() {
 		t.Error("token decoder ran past its buffer")
 	}
+}
+
+// replayMacroblockTokens reads one macroblock's coefficient tokens and
+// returns their model price. A skipped macroblock carries no tokens but
+// still resets the coefficient contexts, preserving the Y2 carry only
+// for B_PRED macroblocks.
+func replayMacroblockTokens(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, up, left *tokCtx) cost.Cost {
+	if mb.skip {
+		prevLeftY2, prevUpY2 := left.y2, up.y2
+		*left = tokCtx{}
+		*up = tokCtx{}
+		if mb.bpred {
+			left.y2, up.y2 = prevLeftY2, prevUpY2
+		}
+		return 0
+	}
+
+	lumaPlane, lumaFirst := token.YAfterY2, 1
+	var model cost.Cost
+	if !mb.bpred {
+		model += replayY2Block(t, tokens, dec, mb, up, left)
+	} else {
+		lumaPlane, lumaFirst = token.YWithDC, 0
+	}
+	model += replayLumaBlocks(t, tokens, dec, mb, up, left, lumaPlane, lumaFirst)
+	model += replayChromaBlocks(t, tokens, dec, mb, up, left)
+	return model
+}
+
+// replayY2Block reads the Y2 block of a whole-block macroblock.
+func replayY2Block(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, up, left *tokCtx) cost.Cost {
+	ctx := int(left.y2 + up.y2)
+	var levels [16]int16
+	gotNZ := readBlockLocal(tokens, dec, token.Y2, ctx, 0, &token.DefaultProbs, &levels)
+	if gotNZ != mb.nz[blockY2] || levels != mb.levels[blockY2] {
+		t.Fatal("Y2 block: parsed levels/nz disagree with the record")
+	}
+	model := cost.BlockCost(token.Y2, ctx, 0, &mb.levels[blockY2], &token.DefaultProbs)
+	nz := uint8(btoi(gotNZ))
+	left.y2, up.y2 = nz, nz
+	return model
+}
+
+// replayLumaBlocks reads the sixteen luma blocks.
+func replayLumaBlocks(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, up, left *tokCtx, lumaPlane, lumaFirst int) cost.Cost {
+	var model cost.Cost
+	for y := 0; y < 4; y++ {
+		nz := left.luma[y]
+		for x := 0; x < 4; x++ {
+			ctx := int(nz) + int(up.luma[x])
+			var levels [16]int16
+			gotNZ := readBlockLocal(tokens, dec, lumaPlane, ctx, lumaFirst, &token.DefaultProbs, &levels)
+			idx := blockLuma + 4*y + x
+			if gotNZ != mb.nz[idx] || levels != mb.levels[idx] {
+				t.Fatalf("luma block %d: parsed levels/nz disagree with the record", idx)
+			}
+			model += cost.BlockCost(lumaPlane, ctx, lumaFirst, &mb.levels[idx], &token.DefaultProbs)
+			nz = uint8(btoi(gotNZ))
+			up.luma[x] = nz
+		}
+		left.luma[y] = nz
+	}
+	return model
+}
+
+// replayChromaBlocks reads the U plane's blocks, then the V plane's.
+func replayChromaBlocks(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, up, left *tokCtx) cost.Cost {
+	var model cost.Cost
+	model += replayChromaPlaneBlocks(t, tokens, dec, mb, token.UV, blockU, &left.u, &up.u)
+	model += replayChromaPlaneBlocks(t, tokens, dec, mb, token.UV, blockV, &left.v, &up.v)
+	return model
+}
+
+// replayChromaPlaneBlocks reads one chroma plane's four blocks.
+func replayChromaPlaneBlocks(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, plane, base int, l, u *[2]uint8) cost.Cost {
+	var model cost.Cost
+	for y := 0; y < 2; y++ {
+		nz := l[y]
+		for x := 0; x < 2; x++ {
+			ctx := int(nz) + int(u[x])
+			var levels [16]int16
+			gotNZ := readBlockLocal(tokens, dec, plane, ctx, 0, &token.DefaultProbs, &levels)
+			idx := base + 2*y + x
+			if gotNZ != mb.nz[idx] || levels != mb.levels[idx] {
+				t.Fatalf("block %d: parsed levels/nz disagree with the record", idx)
+			}
+			model += cost.BlockCost(plane, ctx, 0, &mb.levels[idx], &token.DefaultProbs)
+			nz = uint8(btoi(gotNZ))
+			u[x] = nz
+		}
+		l[y] = nz
+	}
+	return model
 }
 
 // TestCostModelMatchesEmittedSyntaxMixed runs the replay over a mixed
