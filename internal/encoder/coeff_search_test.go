@@ -31,7 +31,7 @@ func encodeMethod(t *testing.T, img image.Image, cfg Config, tune ...func(*encod
 	for _, f := range tune {
 		f(enc)
 	}
-	enc.run()
+	enc.runFrame()
 	var buf writerBuffer
 	if err := enc.writeFile(&buf); err != nil {
 		t.Fatalf("write: %v", err)

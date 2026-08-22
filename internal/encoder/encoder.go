@@ -153,6 +153,26 @@ type encoder struct {
 	// rdCoeffTrellisOff do for theirs.
 	rdProbOptOff bool
 
+	// frozenTokenProbs holds the probability table the last runFrame
+	// derived and priced against, or nil when no derivation shipped.
+	frozenTokenProbs *token.Probs
+
+	// probOptimizationDone records whether runFrame completed its
+	// one probability derivation, even when it kept the default
+	// table and nothing shipped.
+	probOptimizationDone bool
+
+	// probDerivations counts how many times runFrame derived token
+	// probabilities for this frame's final macroblocks; it is 1
+	// once that derivation completed.
+	probDerivations int
+
+	// probReconsiderations counts how many times runFrame reconsidered
+	// analysis under derived probabilities, that is, re-ran the frame
+	// after swapping in an optimized table; it is 1 only when such a
+	// second pass ran.
+	probReconsiderations int
+
 	// Scratch buffers, one macroblock wide, reused across the frame.
 	predY [16 * 16]uint8
 	bestY [16 * 16]uint8
@@ -192,6 +212,25 @@ func newEncoder(src *yuv.Planes, cfg Config) *encoder {
 	}
 }
 
+// resetAnalysis replaces every mutable per-analysis state of the frame
+// with the state a fresh newEncoder(e.src, e.cfg) would carry: new
+// reconstruction planes, zeroed macroblock records, zeroed RD counters,
+// cleared token and sub-mode neighbour contexts, cleared serialization
+// sub-contexts, and cleared scratch buffers. The exact active rateProbs
+// pointer and every explicit behavior or test override survive, so a
+// caller can re-run analysis from a clean slate without re-deriving any
+// configuration.
+func (e *encoder) resetAnalysis() {
+	fresh := newEncoder(e.src, e.cfg)
+	fresh.rateProbs = e.rateProbs
+	fresh.forceBPred = e.forceBPred
+	fresh.rdNoPrune = e.rdNoPrune
+	fresh.rdCoeffOptOff = e.rdCoeffOptOff
+	fresh.rdCoeffTrellisOff = e.rdCoeffTrellisOff
+	fresh.rdProbOptOff = e.rdProbOptOff
+	*e = *fresh
+}
+
 // run analyses and reconstructs every macroblock, in the raster order a
 // decoder uses. Each macroblock predicts from the reconstruction of its
 // neighbours, so the order is not free.
@@ -201,6 +240,42 @@ func (e *encoder) run() {
 			e.encodeMacroblock(mbx, mby)
 		}
 	}
+}
+
+// runFrame encodes one frame end to end, with the Slice 6A probability
+// refinement layered on top of a plain analysis pass. It first runs the
+// frame exactly as every earlier slice does. Methods below the boundary
+// stop there. Otherwise it derives optimized token probabilities from
+// those final macroblocks exactly once and, when any update survived,
+// re-prices analysis under them: rateProbs is swapped for the frozen
+// table, resetAnalysis clears every mutable state while preserving the
+// active table pointer, and run executes once more against the source.
+// The refinement never loops and never re-derives probabilities.
+//
+// The counters record what happened: probDerivations is 1 -- and
+// probOptimizationDone true -- once the one derivation completed, even
+// when optimizeTokenProbs kept the default table; probReconsiderations
+// is additionally 1 only when a derived table shipped and the frame
+// re-ran under it. Below the boundary nothing is recorded.
+func (e *encoder) runFrame() {
+	e.run()
+	if e.cfg.Method < minProbOptMethod {
+		return
+	}
+	frozen := e.optimizeTokenProbs()
+	e.probOptimizationDone = true
+	e.probDerivations = 1
+	if frozen == nil {
+		e.frozenTokenProbs = nil
+		return
+	}
+	e.rateProbs = frozen
+	e.resetAnalysis()
+	e.run()
+	e.probOptimizationDone = true
+	e.probDerivations = 1
+	e.frozenTokenProbs = frozen
+	e.probReconsiderations = 1
 }
 
 // encodeMacroblock chooses the prediction modes, codes the residual, and
@@ -548,8 +623,14 @@ func (e *encoder) frameBytes() ([]byte, error) {
 	// One derivation feeds both the header and the partition, so the two
 	// cannot disagree. Methods below the boundary, and Method 6 encodes
 	// where nothing wins, keep the default table.
+	//
+	// Production's runFrame freezes the derived table in frozenTokenProbs
+	// (nil when no derivation shipped); legacy/internal callers of run()
+	// followed by frameBytes derive it lazily here instead.
 	var tokenProbs *token.Probs
-	if e.cfg.Method >= minProbOptMethod {
+	if e.probOptimizationDone {
+		tokenProbs = e.frozenTokenProbs
+	} else if e.cfg.Method >= minProbOptMethod {
 		tokenProbs = e.optimizeTokenProbs()
 	}
 

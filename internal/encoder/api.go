@@ -25,7 +25,7 @@ type Config struct {
 // Encode writes m to w as a lossy WebP file.
 func Encode(w io.Writer, m image.Image, cfg Config) error {
 	enc := newEncoder(yuv.Convert(m), cfg)
-	enc.run()
+	enc.runFrame()
 	return enc.writeFile(w)
 }
 
@@ -35,7 +35,7 @@ func Encode(w io.Writer, m image.Image, cfg Config) error {
 // the repository's gate harness and tests call this instead of Encode.
 func EncodeWithReconstruction(m image.Image, cfg Config) ([]byte, *image.YCbCr, error) {
 	enc := newEncoder(yuv.Convert(m), cfg)
-	enc.run()
+	enc.runFrame()
 	var buf byteWriter
 	if err := enc.writeFile(&buf); err != nil {
 		return nil, nil, err
