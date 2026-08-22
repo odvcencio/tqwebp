@@ -15,6 +15,7 @@ import (
 
 	"m31labs.dev/tqwebp/internal/boolenc"
 	"m31labs.dev/tqwebp/internal/container"
+	"m31labs.dev/tqwebp/internal/cost"
 	"m31labs.dev/tqwebp/internal/frame"
 	"m31labs.dev/tqwebp/internal/predict"
 	"m31labs.dev/tqwebp/internal/quantize"
@@ -99,6 +100,35 @@ type encoder struct {
 	// above it left there.
 	subCtxAbove [][4]predict.SubMode
 
+	// lambda is the integer rate-distortion slope of cost.Lambda for
+	// this frame's quantizer. Only the WP-2 slice 4 search of
+	// rd_select.go consumes it; earlier paths never read it.
+	lambda int64
+
+	// rd accumulates the deterministic candidate and decision counters
+	// of the slice 4 search; tests read them to prove the search bound
+	// and each macroblock's selected path.
+	rd rdStats
+
+	// rdTokenAbove and rdTokenLeft mirror the token writer's nonzero
+	// neighbour contexts during analysis: after every macroblock's
+	// decision they hold exactly the state writeTokens would carry out
+	// of that macroblock, so the next macroblock's candidates can be
+	// priced against the contexts their tokens would really see.
+	rdTokenAbove []mbContext
+	rdTokenLeft  mbContext
+
+	// rdSubAbove and rdSubLeft mirror the frame writer's sub-mode
+	// contexts during analysis, with the same per-column and per-row
+	// lifetimes frameBytes gives its own copies.
+	rdSubAbove [][4]predict.SubMode
+	rdSubLeft  [4]predict.SubMode
+
+	// rdNoPrune disables the slice 4 pruning bounds when a test sets
+	// it. Production leaves it false; the equivalence test proves the
+	// bounds never change a decision.
+	rdNoPrune bool
+
 	// Scratch buffers, one macroblock wide, reused across the frame.
 	predY [16 * 16]uint8
 	bestY [16 * 16]uint8
@@ -121,15 +151,19 @@ type neighborBuf struct {
 }
 
 func newEncoder(src *yuv.Planes, cfg Config) *encoder {
+	q := quantize.New(quantize.IndexForQuality(cfg.Quality))
 	return &encoder{
-		cfg:         cfg,
-		src:         src,
-		rec:         yuv.NewPlanes(src.Width, src.Height),
-		q:           quantize.New(quantize.IndexForQuality(cfg.Quality)),
-		mbw:         src.MBW,
-		mbh:         src.MBH,
-		mbs:         make([]macroblock, src.MBW*src.MBH),
-		subCtxAbove: make([][4]predict.SubMode, src.MBW),
+		cfg:          cfg,
+		src:          src,
+		rec:          yuv.NewPlanes(src.Width, src.Height),
+		q:            q,
+		mbw:          src.MBW,
+		mbh:          src.MBH,
+		mbs:          make([]macroblock, src.MBW*src.MBH),
+		subCtxAbove:  make([][4]predict.SubMode, src.MBW),
+		lambda:       cost.Lambda(q),
+		rdTokenAbove: make([]mbContext, src.MBW),
+		rdSubAbove:   make([][4]predict.SubMode, src.MBW),
 	}
 }
 
@@ -149,26 +183,30 @@ func (e *encoder) run() {
 func (e *encoder) encodeMacroblock(mbx, mby int) {
 	mb := &e.mbs[mby*e.mbw+mbx]
 
-	if e.forceBPred {
+	switch {
+	case e.forceBPred:
 		// WP-2 slice 2A: the forced B_PRED luma path. It picks and
 		// codes all sixteen 4x4 blocks itself, from immediately
 		// reconstructed neighbours, with no Y2 block.
 		mb.bpred = true
 		e.codeLumaBPred(mbx, mby, mb)
-	} else {
-		wholeSSE := e.chooseLumaMode(mbx, mby, mb)
+		e.chooseChromaMode(mbx, mby, mb)
+		e.codeChroma(mbx, mby, mb)
+	case e.bPredAllowed():
+		// WP-2 slice 4: the reconstructed-neighbour rate-distortion
+		// luma search of rd_select.go. Chroma runs first because it
+		// never depends on luma, and knowing the chroma blocks'
+		// emptiness up front makes each luma candidate's skip state
+		// -- and therefore its exact token accounting -- complete.
+		e.chooseChromaMode(mbx, mby, mb)
+		e.codeChroma(mbx, mby, mb)
+		e.rdChooseLuma(mbx, mby, mb)
+	default:
+		e.chooseLumaMode(mbx, mby, mb)
 		e.codeLuma(mbx, mby, mb)
-		if e.bPredAllowed() {
-			// WP-2 slice 2B: the tentative sixteen-block pass.
-			// It keeps the whole-block result just coded unless
-			// the detailed-block rule clearly prefers it, and
-			// runs before chroma coding and the skip analysis,
-			// which read the luma state either way.
-			e.tryDetailedLuma(mbx, mby, mb, wholeSSE)
-		}
+		e.chooseChromaMode(mbx, mby, mb)
+		e.codeChroma(mbx, mby, mb)
 	}
-	e.chooseChromaMode(mbx, mby, mb)
-	e.codeChroma(mbx, mby, mb)
 
 	mb.skip = true
 	for i := 0; i < numBlocks; i++ {
