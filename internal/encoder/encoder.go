@@ -129,6 +129,12 @@ type encoder struct {
 	// bounds never change a decision.
 	rdNoPrune bool
 
+	// rdCoeffOptOff disables the slice 5B coefficient-candidate
+	// refinement when a test sets it. Production leaves it false; the
+	// equivalence test proves a Method 6 encode with the search off
+	// writes exactly a Method 5 encode's bytes and counters.
+	rdCoeffOptOff bool
+
 	// Scratch buffers, one macroblock wide, reused across the frame.
 	predY [16 * 16]uint8
 	bestY [16 * 16]uint8
@@ -444,6 +450,18 @@ func toScanOrder(raster *[16]int16) [16]int16 {
 		scan[i] = raster[pos]
 	}
 	return scan
+}
+
+// fromScanOrder is toScanOrder's inverse: it rewrites a scan-order block
+// back into raster order. The Method>=6 coefficient search scores its
+// candidates off-plane in raster order -- dequantize, invert, add to the
+// predictor -- while pricing and storing them in scan order.
+func fromScanOrder(scan *[16]int16) [16]int16 {
+	var raster [16]int16
+	for i, pos := range blockdsp.ZigZag {
+		raster[pos] = scan[i]
+	}
+	return raster
 }
 
 // anyNonZero reports whether a raster-order block carries a coefficient

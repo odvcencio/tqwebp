@@ -96,6 +96,16 @@ type rdStats struct {
 	// their sum is mbw*mbh.
 	DecisionsWhole int64
 	DecisionsBPred int64
+	// CoeffBlocksSearched counts YWithDC 4x4 blocks whose retained
+	// levels went through the Method>=6 coefficient candidate search.
+	CoeffBlocksSearched int64
+	// CoeffCandidatesScored sums the unique coefficient candidates the
+	// search priced over all searched blocks; it equals the sum of the
+	// blocks' coeffSearchStats.CandidatesScored.
+	CoeffCandidatesScored int64
+	// CoeffBlocksChanged counts searched blocks whose winning levels
+	// differ from the retained levels.
+	CoeffBlocksChanged int64
 }
 
 // Candidate ordinals fix the canonical tie order. The whole-block modes
@@ -506,6 +516,12 @@ type rdBPredWalk struct {
 	tokenRate  cost.Cost
 	certTokens cost.Cost
 
+	// coeffSearchActive pins the slice-5B boundary once per pass: the
+	// Method>=6 coefficient candidate search runs only when the effort
+	// level allows it and no test disabled it. When false, codeBlock
+	// keeps the retained-level path byte for byte.
+	coeffSearchActive bool
+
 	// skipPossible says the candidate could still finish fully empty
 	// behind an empty chroma and be written as skipped. It starts as
 	// chromaEmpty and dies at the first non-empty luma block, which
@@ -538,9 +554,29 @@ func (w *rdBPredWalk) codeBlock(bx, by, b int, sub predict.SubMode, nb *predict.
 	q := quantizeBlock(&coeff, e.q.Y1)
 	*levels = toScanOrder(&q)
 
+	// Entering token context, computed exactly as it always was.
+	ctx := int(w.left[b/4] + w.up[b%4])
+
+	if w.coeffSearchActive {
+		// Method>=6 refinement: score the bounded candidate set
+		// around the retained levels against this block's source,
+		// pricing each candidate as spatial SSE*256 plus lambda
+		// times its exact token rate under the entering context.
+		// The distortion callback rebuilds every candidate exactly
+		// as a decoder would -- scan to raster, Y1 dequantization,
+		// inverse transform, add to the already-selected predictor,
+		// clamp -- without ever writing the live reconstruction
+		// plane. Only the winning levels survive into *levels; q
+		// becomes their raster order so the shared path below
+		// reconstructs, prices, and threads exactly the winner.
+		winner, _ := e.refineBlockLevels(ctx, levels,
+			e.spatialDistortionFor(src, e.src.YStride, pred))
+		*levels = winner
+		q = fromScanOrder(levels)
+	}
+
 	// Exact token cost in the YWithDC plane, threaded like the luma
 	// rows of writeTokens but starting at coefficient 0.
-	ctx := int(w.left[b/4] + w.up[b%4])
 	tokenCost := cost.BlockCost(token.YWithDC, ctx, 0, levels, &token.DefaultProbs)
 	w.tokenRate += tokenCost
 
@@ -600,12 +636,13 @@ func (e *encoder) rdWalkBPred(mbx, mby int, best *rdCandidate, tok *rdTokenView,
 	var pred [16]uint8
 
 	w := rdBPredWalk{
-		enc:          e,
-		aboveCtx:     e.rdSubAbove[mbx],
-		leftCtx:      e.rdSubLeft,
-		left:         tok.leftLuma,
-		up:           tok.upLuma,
-		skipPossible: chromaEmpty,
+		enc:               e,
+		coeffSearchActive: e.coeffSearchAllowed(),
+		aboveCtx:          e.rdSubAbove[mbx],
+		leftCtx:           e.rdSubLeft,
+		left:              tok.leftLuma,
+		up:                tok.upLuma,
+		skipPossible:      chromaEmpty,
 	}
 	w.records = cost.BPredFlag()
 

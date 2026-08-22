@@ -138,8 +138,10 @@ func TestRDPruningEquivalence(t *testing.T) {
 		// At low quality the whole-block incumbent is often cheap
 		// enough that the B_PRED pass dies mid-way, so this case
 		// exercises the per-block bound the way the flat and mixed
-		// cases exercise the attempt gate.
-		{"detail", bpredDetailRGBA(48, 32, 101), 15},
+		// cases exercise the attempt gate. (Under the slice 5B
+		// coefficient search the pass prices cheaper token shares,
+		// so this fixture pair keeps the bound firing.)
+		{"detail", bpredDetailRGBA(64, 48, 5), 10},
 		{"flat", flatRGBA(48, 32, 128), 35},
 	} {
 		t.Run(spec.name, func(t *testing.T) {
@@ -697,9 +699,41 @@ func (o *rdOracle) scoreBPred(mbx, mby int, src []uint8, tok *rdTokenView) (rdCa
 		coeff := blockdsp.FDCT4x4(&residual)
 		levels := quantizeBlock(&coeff, e.q.Y1)
 		lumaLevels[b] = toScanOrder(&levels)
+
+		// Slice 5B mirror: when the effort level refines retained
+		// levels, re-derive the winning levels here through the
+		// shared enumeration helper, scored by an oracle-side
+		// distortion closure -- scan to raster, Y1 dequantization,
+		// inverse transform, add to this block's predictor, clamp,
+		// squared error against src -- and exact BlockCost under
+		// the entering context. Ties go to the earliest candidate.
+		if e.coeffSearchAllowed() {
+			ctx := int(leftLuma[b/4] + upLuma[b%4])
+			dist := func(cand *[16]int16) int64 {
+				raster := fromScanOrder(cand)
+				deq := blockdsp.DequantizeBlock(&raster, e.q.Y1.DC, e.q.Y1.AC)
+				resOut := blockdsp.IDCT4x4(&deq)
+				var blockSSE int64
+				for y := 0; y < 4; y++ {
+					srcRow := srcRow0[y*e.src.YStride:]
+					predRow := pred[y*4:]
+					resRow := resOut[y*4:]
+					for x := 0; x < 4; x++ {
+						v := clamp8(int32(predRow[x]) + int32(resRow[x]))
+						d := int32(srcRow[x]) - int32(v)
+						blockSSE += int64(d * d)
+					}
+				}
+				return blockSSE
+			}
+			winner, _ := searchCoeffCandidates(token.YWithDC, ctx, 0, &lumaLevels[b], e.lambda, dist)
+			lumaLevels[b] = winner
+		}
+
 		tokenRate += cost.BlockCost(token.YWithDC, int(leftLuma[b/4]+upLuma[b%4]), 0, &lumaLevels[b], probs)
 
-		dequant := blockdsp.DequantizeBlock(&levels, e.q.Y1.DC, e.q.Y1.AC)
+		raster := fromScanOrder(&lumaLevels[b])
+		dequant := blockdsp.DequantizeBlock(&raster, e.q.Y1.DC, e.q.Y1.AC)
 		residualOut := blockdsp.IDCT4x4(&dequant)
 		e.reconstruct(e.rec.Y, e.rec.YStride, bx, by, pred[:], 4, 0, 0, &residualOut)
 		for y := 0; y < 4; y++ {
