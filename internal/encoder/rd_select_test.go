@@ -374,6 +374,15 @@ func TestRDSearchMatchesIndependentOracle(t *testing.T) {
 	} {
 		t.Run(spec.name, func(t *testing.T) {
 			enc := newEncoder(yuv.Convert(spec.img), Config{Quality: spec.q, Method: 6})
+			// Isolation: this is the slice 4/5B independent-oracle
+			// proof. Its expected candidate universe -- five whole-block
+			// modes plus the B_PRED walk over retained levels --
+			// intentionally excludes every slice 5C trellis proposal,
+			// so the trellis layer alone is switched off for this exact
+			// test; the slice 5B candidate search stays enabled and the
+			// trellis itself is proven on production paths in
+			// coeff_search_test.go.
+			enc.rdCoeffTrellisOff = true
 			enc.run()
 
 			o := &rdOracle{enc: enc}

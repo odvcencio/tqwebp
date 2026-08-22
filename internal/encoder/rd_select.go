@@ -106,6 +106,21 @@ type rdStats struct {
 	// CoeffBlocksChanged counts searched blocks whose winning levels
 	// differ from the retained levels.
 	CoeffBlocksChanged int64
+	// TrellisBlocksSearched counts YWithDC blocks whose refinement
+	// ran the slice 5C bounded trellis after the candidate search.
+	// When the trellis is enabled it equals CoeffBlocksSearched.
+	TrellisBlocksSearched int64
+	// TrellisProbesScored sums the marginal-distortion evaluations
+	// the trellis performed over all searched blocks; at most
+	// trellisMaxProbes per block.
+	TrellisProbesScored int64
+	// TrellisEdgesRelaxed sums the dynamic-programming edge
+	// relaxations over all searched blocks; at most
+	// trellisMaxRelaxations per block.
+	TrellisEdgesRelaxed int64
+	// TrellisBlocksChanged counts searched blocks where the trellis
+	// layer displaced the candidate-search winner.
+	TrellisBlocksChanged int64
 }
 
 // Candidate ordinals fix the canonical tie order. The whole-block modes

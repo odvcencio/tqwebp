@@ -135,6 +135,12 @@ type encoder struct {
 	// writes exactly a Method 5 encode's bytes and counters.
 	rdCoeffOptOff bool
 
+	// rdCoeffTrellisOff disables only the slice 5C trellis layer of
+	// the Method>=6 coefficient refinement, leaving the slice 5B
+	// candidate search running. Production leaves it false; tests use
+	// it to isolate the two layers' contributions.
+	rdCoeffTrellisOff bool
+
 	// Scratch buffers, one macroblock wide, reused across the frame.
 	predY [16 * 16]uint8
 	bestY [16 * 16]uint8

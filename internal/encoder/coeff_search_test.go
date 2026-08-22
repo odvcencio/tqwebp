@@ -126,6 +126,13 @@ func TestCoeffWinnerIsIndependentArgmin(t *testing.T) {
 	const quality = 75
 
 	enc := newEncoder(yuv.Convert(img), Config{Quality: quality, Method: 6})
+	// Isolation: this slice 5B independent-oracle proof's expected
+	// candidate universe -- the retained levels plus
+	// enumerateCoeffCandidates' list -- intentionally excludes every
+	// slice 5C trellis proposal, so only the trellis layer is switched
+	// off for this exact test. Production-path trellis proofs live in
+	// the tests below.
+	enc.rdCoeffTrellisOff = true
 	enc.run()
 	mb := &enc.mbs[0]
 	if !mb.bpred {
@@ -261,6 +268,19 @@ func TestCoeffSearchDecoderEquality(t *testing.T) {
 			if err := oracle.CompareExact(reconSource{recon}, decoded); err != nil {
 				t.Error(err)
 			}
+			// Tie the counters to exactly these decoded bytes: the
+			// deterministic encoder writes the same file twice, so the
+			// slice 5C trellis counters below describe the bitstream
+			// just proven decoder-equal.
+			sameData, s := encodeMethod(t, spec.img, Config{Quality: spec.q, Method: 6})
+			if !bytes.Equal(data, sameData) {
+				t.Fatalf("paired encode differed: %d vs %d bytes", len(data), len(sameData))
+			}
+			if s.TrellisBlocksSearched != s.CoeffBlocksSearched ||
+				s.TrellisBlocksSearched == 0 || s.TrellisProbesScored == 0 ||
+				s.TrellisEdgesRelaxed == 0 {
+				t.Fatalf("decoder-equality fixture did not exercise the trellis: %+v", s)
+			}
 		})
 	}
 }
@@ -294,6 +314,14 @@ func TestCoeffSearchDeterminism(t *testing.T) {
 	if first.stats.CoeffBlocksSearched == 0 || first.stats.CoeffBlocksChanged == 0 {
 		t.Fatalf("determinism check ran on an unexercised fixture: %+v", first.stats)
 	}
+	// The trellis layer must be exercised too: identical counters
+	// already cover it through the struct comparison above, and the
+	// positivity requirements here keep the determinism proof from
+	// passing on a fixture where slice 5C never ran.
+	if first.stats.TrellisBlocksSearched != first.stats.CoeffBlocksSearched ||
+		first.stats.TrellisProbesScored == 0 || first.stats.TrellisEdgesRelaxed == 0 {
+		t.Fatalf("determinism fixture did not exercise the slice 5C trellis: %+v", first.stats)
+	}
 }
 
 // TestCoeffSearchEffortBoundary walks the effort ladder and requires
@@ -310,12 +338,72 @@ func TestCoeffSearchEffortBoundary(t *testing.T) {
 			if s.CoeffBlocksSearched != 0 || s.CoeffCandidatesScored != 0 || s.CoeffBlocksChanged != 0 {
 				t.Fatalf("method %d ran the coefficient search: %+v", method, s)
 			}
+			// Below Method 6 neither refinement layer may run: the
+			// slice 5C trellis must stay silent alongside the search.
+			if s.TrellisBlocksSearched != 0 || s.TrellisProbesScored != 0 ||
+				s.TrellisEdgesRelaxed != 0 || s.TrellisBlocksChanged != 0 {
+				t.Fatalf("method %d ran the coefficient trellis: %+v", method, s)
+			}
 		} else if s.CoeffBlocksSearched == 0 || s.CoeffBlocksChanged == 0 {
 			t.Fatalf("method 6 exercised no coefficient search: %+v", s)
+		} else if s.TrellisBlocksSearched != s.CoeffBlocksSearched {
+			t.Fatalf("method 6 trellis searched %d blocks for %d searches: %+v",
+				s.TrellisBlocksSearched, s.CoeffBlocksSearched, s)
 		}
 		if method >= 1 && method <= 4 && !bytes.Equal(data, prev) {
 			t.Fatalf("method %d bytes differ from method %d", method, method-1)
 		}
 		prev = data
+	}
+}
+
+// TestCoeffTrellisMethod6Bounds proves the slice 5C trellis does real,
+// bounded work on the production path at Method 6 -- the highest
+// publicly supported effort -- and reports exactly zero trellis work at
+// Method 5 on the same fixtures. Per searched block the trellis scores
+// at most trellisMaxProbes probes and relaxes at most
+// trellisMaxRelaxations edges (coeff_trellis.go); it searches exactly
+// the blocks the candidate search searched and changes at most those
+// blocks. Fixtures marked wantChange are proven to displace at least
+// one candidate-search winner; the others prove bounds on content
+// where the search winner already survives the trellis pass.
+func TestCoeffTrellisMethod6Bounds(t *testing.T) {
+	for _, spec := range []struct {
+		name       string
+		img        image.Image
+		q          int
+		wantChange bool // proven fixture must displace a winner
+	}{
+		{"mixed q75", bpredMixedRGBA(48, 32, 77), 75, false},
+		{"detail q90", bpredDetailRGBA(64, 48, 101), 90, true},
+	} {
+		t.Run(spec.name, func(t *testing.T) {
+			_, m5 := encodeMethod(t, spec.img, Config{Quality: spec.q, Method: 5})
+			if m5.TrellisBlocksSearched != 0 || m5.TrellisProbesScored != 0 ||
+				m5.TrellisEdgesRelaxed != 0 || m5.TrellisBlocksChanged != 0 {
+				t.Fatalf("method 5 ran coefficient-trellis work: %+v", m5)
+			}
+
+			_, s := encodeMethod(t, spec.img, Config{Quality: spec.q, Method: 6})
+			if s.CoeffBlocksSearched == 0 || s.TrellisBlocksSearched != s.CoeffBlocksSearched {
+				t.Fatalf("trellis searched %d blocks for %d coefficient searches: %+v",
+					s.TrellisBlocksSearched, s.CoeffBlocksSearched, s)
+			}
+			n := s.TrellisBlocksSearched
+			if s.TrellisProbesScored <= 0 || s.TrellisProbesScored > int64(trellisMaxProbes)*n {
+				t.Fatalf("probes %d outside (0,%d] for %d searched blocks",
+					s.TrellisProbesScored, trellisMaxProbes*n, n)
+			}
+			if s.TrellisEdgesRelaxed <= 0 || s.TrellisEdgesRelaxed > int64(trellisMaxRelaxations)*n {
+				t.Fatalf("edges %d outside (0,%d] for %d searched blocks",
+					s.TrellisEdgesRelaxed, trellisMaxRelaxations*n, n)
+			}
+			if s.TrellisBlocksChanged < 0 || s.TrellisBlocksChanged > n {
+				t.Fatalf("%d changed blocks outside [0,%d] searched", s.TrellisBlocksChanged, n)
+			}
+			if s.TrellisBlocksChanged == 0 && spec.wantChange {
+				t.Fatal("proven fixture displaced no trellis winner; changed-block proof is vacuous")
+			}
+		})
 	}
 }

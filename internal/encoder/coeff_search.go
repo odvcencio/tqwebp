@@ -2,7 +2,10 @@ package encoder
 
 // This file is work package WP-2 slice 5B: the coefficient-candidate
 // refinement wired into the B_PRED rate-distortion walk of rd_select.go
-// behind the Method>=6 effort boundary. Method 5 keeps the retained-
+// behind the Method>=6 effort boundary. Slice 5C layers a bounded
+// backward coefficient trellis (coeff_trellis.go) after this search
+// from the same Method 6 boundary upward; both run only through
+// refineBlockLevels below. Method 5 keeps the retained-
 // level path byte for byte; production encodes below Method 6 never
 // reach this file, so their bytes cannot move.
 //
@@ -51,6 +54,22 @@ func (e *encoder) coeffSearchAllowed() bool {
 // refine a block's retained levels through searchCoeffCandidates.
 const minCoeffSearchMethod = 6
 
+// minCoeffTrellisMethod is the lowest effort level whose refinement
+// runs the slice 5C trellis. It coincides with the candidate-search
+// boundary because Method 6 is the highest publicly supported effort:
+// webp.go validates Methods 0 to 6, so any higher gate would leave the
+// trellis unreachable from every valid public encode. At Method 6 the
+// trellis may move winners; at Method 5 and below neither layer runs.
+const minCoeffTrellisMethod = 6
+
+// coeffTrellisAllowed reports whether this encode's refinement may run
+// the slice 5C bounded trellis after the candidate search. It honors
+// both test overrides, so disabling either layer leaves the other
+// intact.
+func (e *encoder) coeffTrellisAllowed() bool {
+	return e.cfg.Method >= minCoeffTrellisMethod && !e.rdCoeffOptOff && !e.rdCoeffTrellisOff
+}
+
 // spatialDistortionFor prices candidate scan levels against the source
 // without touching any plane state: levels go back to raster order, are
 // dequantized with the frame's Y1 factors, inverted, added to the fixed
@@ -88,12 +107,34 @@ func (e *encoder) spatialDistortionFor(src []uint8, srcStride int, pred []uint8)
 // are priced and later written under. The caller converts the winner
 // back to raster order and reconstructs it through rd_select.go's
 // shared path, so losing candidates never touch any plane state.
+//
+// When the slice 5C trellis is allowed, its bounded backward pass runs
+// after the candidate search over the same retained levels, and the
+// final winner comes from exact full-objective scoring over the
+// canonically ordered list -- retained levels, candidate-search
+// winner, trellis path -- so the result can never score worse than
+// what the 5B search alone would have kept, and strict ties keep that
+// earlier baseline.
 func (e *encoder) refineBlockLevels(ctx int, levels *[16]int16, dist spatialDistortionFn) ([16]int16, coeffSearchStats) {
+	retained := *levels
 	winner, stats := searchCoeffCandidates(token.YWithDC, ctx, 0, levels, e.lambda, dist)
 	e.rd.CoeffBlocksSearched++
 	e.rd.CoeffCandidatesScored += int64(stats.CandidatesScored)
 	if stats.Improved {
 		e.rd.CoeffBlocksChanged++
+	}
+	if e.coeffTrellisAllowed() {
+		s5b := winner
+		final, tstats := runCoeffTrellis(trellisWholeScan, token.YWithDC, ctx, &retained,
+			e.lambda, dist, retained, s5b)
+		if final != s5b {
+			e.rd.TrellisBlocksChanged++
+		}
+		e.rd.TrellisBlocksSearched++
+		e.rd.TrellisProbesScored += int64(tstats.Probes)
+		e.rd.TrellisEdgesRelaxed += int64(tstats.EdgesRelaxed)
+		winner = final
+		stats.BestScore = tstats.BestScore
 	}
 	return winner, stats
 }
