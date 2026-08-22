@@ -100,24 +100,39 @@ func (e *encoder) writeTokens() []byte {
 			if mb.skip {
 				// A skipped macroblock codes nothing, and the decoder
 				// clears both contexts. Its blocks are all empty, so
-				// clearing matches what the blocks would have said.
+				// clearing matches what the blocks would have said --
+				// except Y2 on a B_PRED macroblock: it owns no
+				// Walsh-Hadamard block at all, so the decoder's Y2
+				// flags keep whatever earlier macroblocks left there.
+				prevLeftY2, prevUpY2 := left.y2, up.y2
 				left = mbContext{}
 				*up = mbContext{}
+				if mb.bpred {
+					left.y2, up.y2 = prevLeftY2, prevUpY2
+				}
 				continue
 			}
 
-			// The Walsh-Hadamard block comes first.
-			nz := btou(w.WriteBlock(token.Y2, int(left.y2+up.y2), 0, &mb.levels[blockY2]))
-			left.y2, up.y2 = nz, nz
+			// The Walsh-Hadamard block comes first when the macroblock
+			// carries one. A B_PRED macroblock has none: its sixteen
+			// luma blocks each carry their own direct-current value,
+			// coded in the YWithDC plane starting at coefficient 0.
+			lumaPlane, lumaFirst := token.YAfterY2, 1
+			if !mb.bpred {
+				nz := btou(w.WriteBlock(token.Y2, int(left.y2+up.y2), 0, &mb.levels[blockY2]))
+				left.y2, up.y2 = nz, nz
+			} else {
+				lumaPlane, lumaFirst = token.YWithDC, 0
+			}
 
 			// Then the sixteen luma blocks, in raster order. Each one
-			// starts at coefficient 1, because its direct-current value
+			// starts at coefficient 1 when its direct-current value
 			// travelled in the block above.
 			for y := 0; y < 4; y++ {
 				nz := left.luma[y]
 				for x := 0; x < 4; x++ {
 					ctx := int(nz + up.luma[x])
-					nz = btou(w.WriteBlock(token.YAfterY2, ctx, 1, &mb.levels[blockLuma+4*y+x]))
+					nz = btou(w.WriteBlock(lumaPlane, ctx, lumaFirst, &mb.levels[blockLuma+4*y+x]))
 					up.luma[x] = nz
 				}
 				left.luma[y] = nz

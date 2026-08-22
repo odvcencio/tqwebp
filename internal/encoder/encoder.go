@@ -52,6 +52,14 @@ type macroblock struct {
 	yMode  predict.Mode
 	uvMode predict.Mode
 	skip   bool
+	// bpred marks a macroblock whose luma uses the 4x4 sub-mode set
+	// instead of a whole-block mode behind the Walsh-Hadamard transform.
+	// The forced path of work package WP-2 slice 2A sets it for every
+	// macroblock; production selection does not set it yet.
+	bpred bool
+	// subModes holds the sixteen raster-ordered 4x4 luma decisions of a
+	// B_PRED macroblock.
+	subModes [16]predict.SubMode
 	// levels holds quantized coefficient levels in scan order.
 	levels [numBlocks][16]int16
 	// nz marks the blocks that carry at least one coefficient. The token
@@ -74,6 +82,19 @@ type encoder struct {
 	// filter, and level 0 keeps the decoder's picture equal to the
 	// encoder's own reconstruction, which the exact-match test needs.
 	filterLevel int
+
+	// forceBPred makes every macroblock take the B_PRED luma path of
+	// work package WP-2 slice 2A. It exists so tests can drive the new
+	// path before selection lands; production never sets it, and the
+	// default path stays byte-identical.
+	forceBPred bool
+
+	// subCtxAbove holds the B_PRED sub-mode contexts the frame header
+	// codes against: one four-entry vector per macroblock column, the
+	// way the decoder keeps one above record per column. The vector of
+	// macroblock row mby, column mbx reads what the macroblock directly
+	// above it left there.
+	subCtxAbove [][4]predict.SubMode
 
 	// Scratch buffers, one macroblock wide, reused across the frame.
 	predY [16 * 16]uint8
@@ -98,13 +119,14 @@ type neighborBuf struct {
 
 func newEncoder(src *yuv.Planes, cfg Config) *encoder {
 	return &encoder{
-		cfg: cfg,
-		src: src,
-		rec: yuv.NewPlanes(src.Width, src.Height),
-		q:   quantize.New(quantize.IndexForQuality(cfg.Quality)),
-		mbw: src.MBW,
-		mbh: src.MBH,
-		mbs: make([]macroblock, src.MBW*src.MBH),
+		cfg:         cfg,
+		src:         src,
+		rec:         yuv.NewPlanes(src.Width, src.Height),
+		q:           quantize.New(quantize.IndexForQuality(cfg.Quality)),
+		mbw:         src.MBW,
+		mbh:         src.MBH,
+		mbs:         make([]macroblock, src.MBW*src.MBH),
+		subCtxAbove: make([][4]predict.SubMode, src.MBW),
 	}
 }
 
@@ -124,10 +146,17 @@ func (e *encoder) run() {
 func (e *encoder) encodeMacroblock(mbx, mby int) {
 	mb := &e.mbs[mby*e.mbw+mbx]
 
-	e.chooseLumaMode(mbx, mby, mb)
+	if e.forceBPred {
+		// WP-2 slice 2A: the forced B_PRED luma path. It picks and
+		// codes all sixteen 4x4 blocks itself, from immediately
+		// reconstructed neighbours, with no Y2 block.
+		mb.bpred = true
+		e.codeLumaBPred(mbx, mby, mb)
+	} else {
+		e.chooseLumaMode(mbx, mby, mb)
+		e.codeLuma(mbx, mby, mb)
+	}
 	e.chooseChromaMode(mbx, mby, mb)
-
-	e.codeLuma(mbx, mby, mb)
 	e.codeChroma(mbx, mby, mb)
 
 	mb.skip = true
@@ -435,11 +464,39 @@ func (e *encoder) frameBytes() ([]byte, error) {
 		QuantIndex:      int(e.q.Index),
 		SkipProb:        skipProb,
 	})
-	for i := range e.mbs {
-		mb := &e.mbs[i]
-		first.WriteBool(skipProb, mb.skip)
-		writeLumaMode(first, mb.yMode)
-		writeChromaMode(first, mb.uvMode)
+	// Per-macroblock prediction records, in raster order. The sub-mode
+	// contexts mirror the decoder's own state: one four-entry vector per
+	// macroblock column for the row above -- subCtxAbove[mbx] is what
+	// the macroblock directly above this one left there, fresh zeroes
+	// (B_DC_PRED) on the top macroblock row -- and one vector per
+	// macroblock row for the left, restarted at every row. Resetting the
+	// column table here keeps serializing twice, as the tests do,
+	// identical to serializing once.
+	for i := range e.subCtxAbove {
+		e.subCtxAbove[i] = [4]predict.SubMode{}
+	}
+	var leftSub [4]predict.SubMode
+	for mby := 0; mby < e.mbh; mby++ {
+		leftSub = [4]predict.SubMode{}
+		for mbx := 0; mbx < e.mbw; mbx++ {
+			mb := &e.mbs[mby*e.mbw+mbx]
+			aboveSub := &e.subCtxAbove[mbx]
+			first.WriteBool(skipProb, mb.skip)
+			if mb.bpred {
+				writeBPredModes(first, mb, aboveSub, &leftSub)
+			} else {
+				writeLumaMode(first, mb.yMode)
+				// A whole-block macroblock seeds all four above and
+				// left entries with the sub-mode value its mode maps
+				// to, exactly as the decoder's records do.
+				ctx := subModeContextOf(mb.yMode)
+				for i := range leftSub {
+					aboveSub[i] = ctx
+					leftSub[i] = ctx
+				}
+			}
+			writeChromaMode(first, mb.uvMode)
+		}
 	}
 
 	tokens := e.writeTokens()
