@@ -107,8 +107,14 @@ func TestLiteralPrices(t *testing.T) {
 			t.Errorf("Literal(%d) = %d, want %d", n, got, want)
 		}
 	}
-	if got, want := Literal(24), SizeField(); got != want {
-		t.Errorf("SizeField() = %d, want Literal(24) = %d", got, want)
+	// The frame tag's first-partition size subfield is 19 bits, RFC 6386
+	// section 9.1 -- not the 24-bit tag word around it. Pinned as a
+	// literal so a regression back to the whole tag is loud.
+	if got, want := SizeField(), Cost(19*Unit); got != want {
+		t.Errorf("SizeField() = %d, want 19 bits = %d", got, want)
+	}
+	if got, want := Literal(SizeFieldBits), SizeField(); got != want {
+		t.Errorf("SizeField() = %d, want Literal(SizeFieldBits) = %d", got, want)
 	}
 }
 

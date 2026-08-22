@@ -108,13 +108,21 @@ func Literal(n int) Cost {
 	return Cost(n) * Unit
 }
 
-// SizeFieldBits is the width, in plain bits, of the frame tag's
-// first-partition size field, RFC 6386 section 9.1. The field is
+// SizeFieldBits is the width, in plain bits, of the first-partition
+// size subfield inside the frame tag, RFC 6386 section 9.1. The tag is
+// one 24-bit little-endian word packing four fields: frame type L(1),
+// version L(3), show-frame L(1), and the first partition's byte length
+// L(19) at bit offset 5. Only the 19-bit subfield varies with the
+// partition -- for a key frame the writer fixes the type to 0, the
+// version to 0, and show-frame to 1 -- so the rate model prices the
+// subfield, not the whole tag word. The length is carried raw, so
+// 2^19-1 bytes is the largest first partition the format can signal;
+// internal/frame refuses to assemble anything longer. The field is
 // fixed-width, so it prices the same whatever the partition contains.
-const SizeFieldBits = 24
+const SizeFieldBits = 19
 
 // SizeField returns the constant price of signalling the first
-// partition's byte length.
+// partition's byte length in the frame tag.
 func SizeField() Cost { return Literal(SizeFieldBits) }
 
 // PartitionZeroBytes converts a partition-zero rate total into the

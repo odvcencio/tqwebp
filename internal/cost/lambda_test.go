@@ -100,18 +100,50 @@ func TestLambdaClampsWithThePublicKnob(t *testing.T) {
 	}
 }
 
-// TestLambdaRoundsHalvesTowardZero pins the rounding rule on a case
-// that lands exactly on a half: at index 16 the step is 20, so
-// 85*400+50 = 34050 and the slope is 34.05 bits' worth -- the integer
-// derivation truncates to 340. Any future reimplementation that routes
-// through floating point and rounds half away from zero would produce
-// 341 here, which this pin makes loud.
-func TestLambdaRoundsHalvesTowardZero(t *testing.T) {
-	q := quantize.New(quantize.Index(16))
-	if s := int64(q.Y1.AC); s != 20 {
-		t.Fatalf("index 16 carries luma step %d, test assumes 20", s)
+// TestLambdaNearestIntegerRounding pins the rounding rule accurately.
+// The slope is the rational 85*s^2/100, rounded to the nearest integer
+// by the integer idiom (85*s^2 + 50) / 100: add half the denominator,
+// then truncate. An exact tie -- a fraction of exactly one half --
+// would require 85*s^2 == 50 (mod 100), which reduces to
+// s^2 == 10 (mod 20). Squares modulo 20 are only 0, 1, 4, 5, 9, or 16,
+// so no integer s satisfies it. Ties are therefore
+// impossible and the idiom is plain nearest-integer rounding, not a
+// half-rounding rule; the sweep below proves the same over every step
+// the normative factor table can produce, whose fractions are
+// multiples of 1/100 and never 1/2.
+//
+// The real factor table supplies steps on both sides of the boundary.
+// The closest achievable fractions to one half are 40/100 and 60/100:
+// index 18 carries step 22, so the slope is 411.40 and must round
+// down; index 22 carries step 26, so the slope is 574.60 and must
+// round up. Index 16 carries step 20, whose slope is exactly 340 -- an
+// integral value that needs no rounding at all.
+func TestLambdaNearestIntegerRounding(t *testing.T) {
+	cases := []struct {
+		index quantize.Index
+		step  int64
+		slope int64
+	}{
+		{16, 20, 340}, // 340.00: integral, no rounding
+		{18, 22, 411}, // 411.40: below the half boundary, rounds down
+		{22, 26, 575}, // 574.60: above the half boundary, rounds up
 	}
-	if got, want := Lambda(q), int64(340); got != want {
-		t.Fatalf("Lambda(index 16) = %d, want %d", got, want)
+	for _, c := range cases {
+		q := quantize.New(c.index)
+		if s := int64(q.Y1.AC); s != c.step {
+			t.Fatalf("index %d carries luma step %d, test assumes %d", c.index, s, c.step)
+		}
+		if got, want := Lambda(q), c.slope; got != want {
+			t.Fatalf("Lambda(index %d) = %d, want %d", c.index, got, want)
+		}
+	}
+
+	// No step in the normative table lands on an exact half: the
+	// numerator residue is never half the denominator.
+	for idx := 0; idx <= 127; idx++ {
+		s := int64(quantize.New(quantize.Index(idx)).Y1.AC)
+		if residue := (lambdaNumerator * s * s) % lambdaDenominator; residue == lambdaDenominator/2 {
+			t.Fatalf("index %d: step %d lands on an exact half, the impossible case", idx, s)
+		}
 	}
 }
