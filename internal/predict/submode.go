@@ -635,6 +635,20 @@ func buildSubModePaths() [NumSubModes]subModePath {
 	return paths
 }
 
+// SubModePath reports the boolean decisions WriteSubMode issues for m,
+// in coding order: probIdx names the entry of the context probability
+// row each decision codes against, bit is the decision itself, and n
+// counts them. It exists so the WP-2 rate model can price sub-mode
+// choices without writing anything and without a second copy of the
+// tree: the tree stays the single source of what the syntax emits.
+func SubModePath(m SubMode) (probIdx [9]uint8, bit [9]bool, n int) {
+	if m < 0 || m >= NumSubModes {
+		panic("tqwebp/predict: unknown sub-mode")
+	}
+	p := &subModePaths[m]
+	return p.probIdx, p.bit, int(p.n)
+}
+
 // WriteSubMode writes one 4x4 sub-mode into w, coding against the
 // key-frame contextual probabilities selected by the block above
 // (aboveCtx) and the block to the left (leftCtx).

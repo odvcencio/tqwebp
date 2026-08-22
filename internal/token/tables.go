@@ -58,6 +58,17 @@ const (
 	cat2Prob1 = 145
 )
 
+// Cat1Prob, Cat2Prob0, and Cat2Prob1 expose the category-one and
+// category-two extra-bit probabilities under exported names. They equal
+// cat1Prob, cat2Prob0, and cat2Prob1 above, and they exist so the WP-2
+// rate model (internal/cost) can price token magnitudes without keeping
+// a second copy of normative data.
+const (
+	Cat1Prob  = cat1Prob
+	Cat2Prob0 = cat2Prob0
+	Cat2Prob1 = cat2Prob1
+)
+
 // ExtraProbs holds the extra-bit probabilities of categories 3 to 6, RFC
 // 6386 section 13.2. Each row ends at its first zero.
 var ExtraProbs = [4][11]uint8{

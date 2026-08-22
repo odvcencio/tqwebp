@@ -6,6 +6,19 @@ All notable changes to tqwebp are documented in this file.
 
 ### Added
 
+- `internal/cost`: the exact rate primitives the coming
+  reconstructed-neighbour search will consume. Q8 fixed-point boolean
+  decision costs cover every codable probability in both branches; on
+  top of them sit key-frame luma and chroma mode trees, contextual
+  B_PRED sub-mode trees priced through the same tree path the writer
+  codes, skip decisions, segment-id tree costs, coefficient tokens with
+  their magnitude categories and extra bits, probability-update
+  decisions, partition-zero byte accounting, and an integer-only lambda
+  derived from the quality knob. Nothing in the production encode path
+  consumes these yet, so every encoded file stays byte for byte; a
+  full-frame replay parser proves the model prices the emitted syntax
+  decision for decision at both effort paths.
+
 - `internal/encoder`: a conservative detailed-block selector for the
   B_PRED luma path, available only at `Method` 5 and 6. A macroblock
   whose whole-block prediction fits poorly may be coded as sixteen
