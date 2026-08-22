@@ -141,7 +141,7 @@ var (
 	// rdBlockFloor is the cheapest possible coefficient block: an
 	// immediate end-of-block flag in the YWithDC plane under the most
 	// favourable band and neighbour context.
-	rdBlockFloor = minBlockEOBCost()
+	rdBlockFloor = minBlockEOBCost(&token.DefaultProbs)
 )
 
 // minSubModeCost walks every context pair and sub-mode of the key-frame
@@ -163,17 +163,24 @@ func minSubModeCost() cost.Cost {
 // minBlockEOBCost returns the price of the cheapest block the token
 // layer can carry in the YWithDC plane: one false end-of-block flag,
 // taken over every scan position's band and every neighbour context.
-func minBlockEOBCost() cost.Cost {
+func minBlockEOBCost(probs *token.Probs) cost.Cost {
 	best := cost.Cost(1) << 60
 	for ctx := 0; ctx <= 2; ctx++ {
 		for n := 0; n < 16; n++ {
-			p := token.DefaultProbs[token.YWithDC][token.Bands[n]][ctx][0]
+			p := probs[token.YWithDC][token.Bands[n]][ctx][0]
 			if c := cost.BitCostZero(p); c < best {
 				best = c
 			}
 		}
 	}
 	return best
+}
+
+// blockEOBFloor returns minBlockEOBCost over the encoder's own rate
+// table, so pruning lower bounds are priced from the same probability
+// table as candidate coding.
+func (e *encoder) blockEOBFloor() cost.Cost {
+	return minBlockEOBCost(e.rateProbs)
 }
 
 // rdCandidate is one luma hypothesis with its charged rate-distortion
@@ -480,7 +487,7 @@ func (e *encoder) rdEvalWhole(mbx, mby int, m predict.Mode, src []uint8, tok *rd
 // from the entering shadow and ends at its last block's flag. It
 // reports the total token cost and whether every block came out empty.
 func (e *encoder) rdPriceWholeTokens(y2Levels *[16]int16, luma *[16][16]int16, tok *rdTokenView) (cost.Cost, bool) {
-	probs := &token.DefaultProbs
+	probs := e.rateProbs
 	tokenRate := cost.Cost(0)
 	tokenRate += cost.BlockCost(token.Y2, int(tok.leftY2+tok.upY2), 0, y2Levels, probs)
 	lumaEmpty := !anyNonZeroScan(y2Levels)
@@ -584,15 +591,15 @@ func (w *rdBPredWalk) codeBlock(bx, by, b int, sub predict.SubMode, nb *predict.
 		// plane. Only the winning levels survive into *levels; q
 		// becomes their raster order so the shared path below
 		// reconstructs, prices, and threads exactly the winner.
-		winner, _ := e.refineBlockLevels(ctx, levels,
-			e.spatialDistortionFor(src, e.src.YStride, pred))
+		winner, _ := e.refineBlockLevelsWithProbs(ctx, levels,
+			e.spatialDistortionFor(src, e.src.YStride, pred), e.rateProbs)
 		*levels = winner
 		q = fromScanOrder(levels)
 	}
 
 	// Exact token cost in the YWithDC plane, threaded like the luma
 	// rows of writeTokens but starting at coefficient 0.
-	tokenCost := cost.BlockCost(token.YWithDC, ctx, 0, levels, &token.DefaultProbs)
+	tokenCost := cost.BlockCost(token.YWithDC, ctx, 0, levels, e.rateProbs)
 	w.tokenRate += tokenCost
 
 	dequant := blockdsp.DequantizeBlock(&q, e.q.Y1.DC, e.q.Y1.AC)
@@ -685,7 +692,7 @@ func (e *encoder) rdWalkBPred(mbx, mby int, best *rdCandidate, tok *rdTokenView,
 		if !e.rdNoPrune && b < 15 {
 			remaining := cost.Cost(15-b) * rdSubModeFloor
 			if !w.skipPossible {
-				remaining += cost.Cost(15-b) * rdBlockFloor
+				remaining += cost.Cost(15-b) * e.blockEOBFloor()
 			}
 			if e.rdScore(w.sse, w.records+w.certTokens+remaining) >= best.score {
 				e.rd.BpredAborts++
@@ -779,7 +786,7 @@ func (e *encoder) rdBPredGate(best *rdCandidate, chromaEmpty bool) bool {
 	}
 	blockFloor := cost.Cost(0)
 	if !chromaEmpty {
-		blockFloor = rdBlockFloor
+		blockFloor = e.blockEOBFloor()
 	}
 	floor := cost.BPredFlag() + cost.Cost(16)*(rdSubModeFloor+blockFloor)
 	return int64(floor)*e.lambda < best.score

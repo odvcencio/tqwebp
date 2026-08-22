@@ -251,7 +251,12 @@ func trellisExtraBits(cat int) int { return trellisExtraBitsTable[cat] }
 // exactly whenever the levels are codable; the focused tests prove
 // that identity directly.
 func trellisPathRate(plane, ctx, first int, levels *[16]int16) cost.Cost {
-	probs := &token.DefaultProbs
+	return trellisPathRateWithProbs(plane, ctx, first, levels, &token.DefaultProbs)
+}
+
+// trellisPathRateWithProbs is trellisPathRate priced under the given
+// probability table instead of the defaults.
+func trellisPathRateWithProbs(plane, ctx, first int, levels *[16]int16, probs *token.Probs) cost.Cost {
 	planeProbs := &probs[plane]
 
 	last := -1
@@ -315,7 +320,12 @@ func trellisPathRate(plane, ctx, first int, levels *[16]int16) cost.Cost {
 // more-coefficients flag until the tail's last nonzero ends the
 // block. The caller guarantees the tail holds at least one nonzero.
 func trellisTailRate(plane, lastPos, cur int, levels *[16]int16) cost.Cost {
-	probs := &token.DefaultProbs
+	return trellisTailRateWithProbs(plane, lastPos, cur, levels, &token.DefaultProbs)
+}
+
+// trellisTailRateWithProbs is trellisTailRate priced under the given
+// probability table instead of the defaults.
+func trellisTailRateWithProbs(plane, lastPos, cur int, levels *[16]int16, probs *token.Probs) cost.Cost {
 	planeProbs := &probs[plane]
 
 	tailLast := -1
@@ -386,6 +396,7 @@ func trellisScopeOf(cfg trellisConfig) trellisScope {
 type trellisGraph struct {
 	sc             trellisScope
 	plane          int
+	probs          *token.Probs
 	sets           [16]trellisChoiceSet
 	delta          [16][trellisMaxChoices]int64
 	zeroOKAfter    [16]bool
@@ -401,12 +412,19 @@ type trellisTail struct {
 	rate  [trellisNumContexts]cost.Cost
 }
 
-// trellisTailOf prices the fixed tail beyond the window. The tail is
-// either empty, leaving every in-window path free to end the block,
-// or carries a nonzero, forcing continuation and pricing the tail
+// trellisTailOf prices the fixed tail beyond the window under the
+// default probability table.
+func trellisTailOf(plane, last int, levels *[16]int16) trellisTail {
+	return trellisTailOfWithProbs(plane, last, levels, &token.DefaultProbs)
+}
+
+// trellisTailOfWithProbs is trellisTailOf priced under the given
+// probability table instead of the defaults. The tail is either
+// empty, leaving every in-window path free to end the block, or
+// carries a nonzero, forcing continuation and pricing the tail
 // exactly per exiting context. Positions below first are zero by the
 // checked precondition, so the writer always starts at first.
-func trellisTailOf(plane, last int, levels *[16]int16) trellisTail {
+func trellisTailOfWithProbs(plane, last int, levels *[16]int16, probs *token.Probs) trellisTail {
 	var t trellisTail
 	for i := last + 1; i < 16; i++ {
 		if (*levels)[i] != 0 {
@@ -416,7 +434,7 @@ func trellisTailOf(plane, last int, levels *[16]int16) trellisTail {
 	}
 	if t.hasNZ {
 		for c := 0; c < trellisNumContexts; c++ {
-			t.rate[c] = trellisTailRate(plane, last, c, levels)
+			t.rate[c] = trellisTailRateWithProbs(plane, last, c, levels, probs)
 		}
 	}
 	return t
@@ -532,7 +550,7 @@ func (tp *trellisPass) relaxEdge(i, c, k int) (int64, bool) {
 	case v == 0 && tp.f[0] >= trellisInfinity:
 		return trellisInfinity, false
 	case v == 0:
-		p1 := &token.DefaultProbs[tp.g.plane][token.Bands[i]]
+		p1 := &tp.g.probs[tp.g.plane][token.Bands[i]]
 		rate := cost.BitCostZero(p1[c][1])
 		cand = tp.lambda*int64(rate) + 256*tp.g.delta[i][k] + tp.f[0]
 	default:
@@ -540,7 +558,7 @@ func (tp *trellisPass) relaxEdge(i, c, k int) (int64, bool) {
 		if mag < 0 {
 			mag = -mag
 		}
-		p1 := &token.DefaultProbs[tp.g.plane][token.Bands[i]]
+		p1 := &tp.g.probs[tp.g.plane][token.Bands[i]]
 		pn := &p1[c]
 		rate := cost.BitCostOne(pn[1])
 		if mag == 1 {
@@ -569,7 +587,7 @@ func (tp *trellisPass) relaxEdge(i, c, k int) (int64, bool) {
 // the continuation edge already carries the flag, and the boundary
 // sits behind the window, so ending here would misprice the path.
 func (tp *trellisPass) choosePath(i int, own int64, nc int) (int64, bool) {
-	pNext := &token.DefaultProbs[tp.g.plane][token.Bands[i+1]][nc]
+	pNext := &tp.g.probs[tp.g.plane][token.Bands[i+1]][nc]
 	endOpt := own + tp.lambda*int64(cost.BitCostZero(pNext[0]))
 	if !tp.g.tail.hasNZ {
 		// Ending here codes nothing after i, so positions
@@ -732,7 +750,7 @@ func trellisBackward(g *trellisGraph, ctx int, retained *[16]int16, lambda int64
 			}
 		}
 	}
-	planeProbs := &token.DefaultProbs[g.plane]
+	planeProbs := &g.probs[g.plane]
 	pathScore := trellisInfinity
 	if tp.f[ctx] < trellisInfinity {
 		pathScore = lambda*int64(cost.BitCostOne(planeProbs[token.Bands[g.sc.first]][ctx][0])) + tp.f[ctx]
@@ -754,14 +772,21 @@ func trellisBackward(g *trellisGraph, ctx int, retained *[16]int16, lambda int64
 }
 
 // selectTrellisWinner picks the final winner by exact full-objective
-// scoring over the canonical list -- baselines in the caller's order,
-// then the trellis path -- with strictly-smaller replacement, so the
-// earliest entry wins every strict tie. With no baselines the
-// retained levels anchor the canonical order; a tie with them is not
-// a trellis win.
+// scoring under the default probability table. It is the
+// DefaultProbs wrapper around selectTrellisWinnerWithProbs.
 func selectTrellisWinner(sc trellisScope, plane, ctx int, retained, winner *[16]int16, lambda int64, dist spatialDistortionFn, baselines [][16]int16, stats *coeffTrellisStats) [16]int16 {
+	return selectTrellisWinnerWithProbs(sc, plane, ctx, retained, winner, lambda, dist, baselines, stats, &token.DefaultProbs)
+}
+
+// selectTrellisWinnerWithProbs picks the final winner by exact
+// full-objective scoring priced under the supplied probability table
+// over the canonical list -- baselines in the caller's order, then the
+// trellis path -- with strictly-smaller replacement, so the earliest
+// entry wins every strict tie. With no baselines the retained levels
+// anchor the canonical order; a tie with them is not a trellis win.
+func selectTrellisWinnerWithProbs(sc trellisScope, plane, ctx int, retained, winner *[16]int16, lambda int64, dist spatialDistortionFn, baselines [][16]int16, stats *coeffTrellisStats, probs *token.Probs) [16]int16 {
 	score := func(levels *[16]int16) int64 {
-		return dist(levels)*256 + lambda*int64(cost.BlockCost(plane, ctx, sc.first, levels, &token.DefaultProbs))
+		return dist(levels)*256 + lambda*int64(cost.BlockCost(plane, ctx, sc.first, levels, probs))
 	}
 	var final [16]int16
 	bestScore := int64(0)
@@ -796,29 +821,38 @@ func selectTrellisWinner(sc trellisScope, plane, ctx int, retained, winner *[16]
 }
 
 // runCoeffTrellis builds the bounded backward trellis for the
-// retained scan levels under entering context ctx, extracts its best
-// path under the additive model, and selects the final winner by
-// exact full-objective scoring over the canonically ordered baseline
-// list followed by the trellis path. Baselines[0] anchors the
-// canonical order: every later entry needs a strictly smaller score
-// to displace it, so the returned objective is never worse than any
-// baseline's and strict ties retain the earliest entry. The retained
-// levels themselves must be codable and, below cfg.firstPos, zero.
-// The phases run in fixed order -- probes, tail boundary, suffix
-// zeroes, backward pass, rollout -- and every guard keeps its place
-// in that order.
+// retained scan levels under entering context ctx and selects the
+// final winner under the default probability table. It is the
+// DefaultProbs wrapper around runCoeffTrellisWithProbs.
 func runCoeffTrellis(cfg trellisConfig, plane, ctx int, retained *[16]int16, lambda int64, dist spatialDistortionFn, baselines ...[16]int16) ([16]int16, coeffTrellisStats) {
+	return runCoeffTrellisWithProbs(cfg, plane, ctx, retained, lambda, dist, &token.DefaultProbs, baselines...)
+}
+
+// runCoeffTrellisWithProbs builds the bounded backward trellis for the
+// retained scan levels under entering context ctx, extracts its best
+// path under the additive model priced by the supplied probability
+// table, and selects the final winner by exact full-objective scoring
+// over the canonically ordered baseline list followed by the trellis
+// path. Baselines[0] anchors the canonical order: every later entry
+// needs a strictly smaller score to displace it, so the returned
+// objective is never worse than any baseline's and strict ties retain
+// the earliest entry. The retained levels themselves must be codable
+// and, below cfg.firstPos, zero. The phases run in fixed order --
+// probes, tail boundary, suffix zeroes, backward pass, rollout -- and
+// every guard keeps its place in that order.
+func runCoeffTrellisWithProbs(cfg trellisConfig, plane, ctx int, retained *[16]int16, lambda int64, dist spatialDistortionFn, probs *token.Probs, baselines ...[16]int16) ([16]int16, coeffTrellisStats) {
 	var stats coeffTrellisStats
 	sc := trellisScopeOf(cfg)
 	if ctx < 0 || ctx >= trellisNumContexts {
 		panic("encoder: coefficient trellis context out of range")
 	}
 	sets, delta := buildTrellisProbes(cfg, sc, retained, dist, &stats)
-	tail := trellisTailOf(plane, sc.last, retained)
+	tail := trellisTailOfWithProbs(plane, sc.last, retained, probs)
 	zeroOKAfter, zeroDeltaAfter := buildTrellisZeroSuffix(sc, &sets, &delta)
 	g := &trellisGraph{
 		sc:             sc,
 		plane:          plane,
+		probs:          probs,
 		sets:           sets,
 		delta:          delta,
 		zeroOKAfter:    zeroOKAfter,
@@ -826,6 +860,6 @@ func runCoeffTrellis(cfg trellisConfig, plane, ctx int, retained *[16]int16, lam
 		tail:           tail,
 	}
 	winner := trellisBackward(g, ctx, retained, lambda, &stats)
-	final := selectTrellisWinner(sc, plane, ctx, retained, &winner, lambda, dist, baselines, &stats)
+	final := selectTrellisWinnerWithProbs(sc, plane, ctx, retained, &winner, lambda, dist, baselines, &stats, probs)
 	return final, stats
 }

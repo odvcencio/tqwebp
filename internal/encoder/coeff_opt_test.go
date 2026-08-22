@@ -563,3 +563,148 @@ func TestCostParityWithWriterPricing(t *testing.T) {
 		t.Errorf("best score %d, want distortion %d *256 + lambda*rate %d = %d", stats.BestScore, dist, int64(rate), want)
 	}
 }
+
+// flippedProbs returns a copy of token.DefaultProbs with every
+// probability mirrored around 128 (256-p, clamped into 1..255), a
+// deterministic custom table that prices blocks differently from the
+// default one everywhere.
+func flippedProbs() token.Probs {
+	var out token.Probs
+	for p := range out {
+		for b := range out[p] {
+			for c := range out[p][b] {
+				for n := range out[p][b][c] {
+					out[p][b][c][n] = uint8(256 - int(token.DefaultProbs[p][b][c][n]))
+				}
+			}
+		}
+	}
+	return out
+}
+
+func TestScoreCoeffCandidateWithProbsMatchesBlockCostOracle(t *testing.T) {
+	custom := flippedProbs()
+	if custom == token.DefaultProbs {
+		t.Fatal("custom table equals the default table; test would be vacuous")
+	}
+
+	const plane, ctx, first = token.UV, 1, 3
+	const lambda = 73
+	target := testVec(2, -3, 0, 5, 0, 0, 1)
+	distortion := sseAgainst(target)
+
+	for _, v := range [][16]int16{
+		testVec(2, -3, 0, 5),
+		testVec(2, -3),
+		testVec(0, 0, 0, 0, 0, 0, 0, 7),
+		testVec(1),
+	} {
+		got := scoreCoeffCandidateWithProbs(plane, ctx, first, &custom, &v, lambda, distortion)
+		rate := int64(cost.BlockCost(plane, ctx, first, &v, &custom))
+		want := distortion(&v)*256 + lambda*rate
+		if got != want {
+			t.Errorf("levels %v: with-probs score %d, want BlockCost-oracle %d", v, got, want)
+		}
+	}
+}
+
+func TestSearchCoeffCandidatesWithProbsMatchesBlockCostOracle(t *testing.T) {
+	custom := flippedProbs()
+	const plane, ctx, first = token.YAfterY2, 2, 0
+	const lambda = 57
+
+	for _, initial := range smallVectorSpace() {
+		winner, stats := searchCoeffCandidatesWithProbs(plane, ctx, first, &custom, &initial, lambda, sseAgainst(testVec(1, 2)))
+
+		// The reported best score must price the winner exactly as
+		// cost.BlockCost does under the supplied table.
+		rate := int64(cost.BlockCost(plane, ctx, first, &winner, &custom))
+		want := sseAgainst(testVec(1, 2))(&winner)*256 + lambda*rate
+		if stats.BestScore != want {
+			t.Errorf("%v: best score %d, want oracle %d", initial, stats.BestScore, want)
+		}
+
+		// The winner must beat -- strictly, on ties keeping the
+		// earliest -- every independently enumerated candidate
+		// scored through the same supplied table.
+		cands := referenceCoeffCandidates(initial)
+		bestOrd, bestScore := 0, int64(0)
+		for i, c := range cands {
+			s := sseAgainst(testVec(1, 2))(&c)*256 + lambda*int64(cost.BlockCost(plane, ctx, first, &c, &custom))
+			if i == 0 || s < bestScore {
+				bestOrd, bestScore = i, s
+			}
+		}
+		if winner != cands[bestOrd] {
+			t.Errorf("%v: winner %v, want oracle winner %v (ordinal %d)", initial, winner, cands[bestOrd], bestOrd)
+		}
+		if stats.WinningOrdinal != bestOrd {
+			t.Errorf("%v: winning ordinal %d, want oracle ordinal %d", initial, stats.WinningOrdinal, bestOrd)
+		}
+	}
+}
+
+func TestCoeffCandidateDefaultWrapperEqualsWithProbsDefault(t *testing.T) {
+	initials := [][16]int16{
+		testVec(4, 0, -2, 1),
+		testVec(9, 9, 0, 0, 3),
+		testVec(0),
+		testVec(2, 2, 2, 2, 2, 2, 2, 2),
+	}
+
+	for _, initial := range initials {
+		for _, cfg := range []struct {
+			plane, ctx, first int
+			lambda            int64
+			target            [16]int16
+		}{
+			{token.YWithDC, 0, 0, 101, testVec(3, 0, 0, 1)},
+			{token.UV, 2, 5, -19, testVec(4, 0, 2)},
+			{token.Y2, 1, 1, 0, testVec(6)},
+			{token.YAfterY2, 1, 0, 77, testVec(1, 1, 1)},
+		} {
+			wantLevels, wantStats := searchCoeffCandidates(cfg.plane, cfg.ctx, cfg.first, &initial, cfg.lambda, sseAgainst(cfg.target))
+			gotLevels, gotStats := searchCoeffCandidatesWithProbs(cfg.plane, cfg.ctx, cfg.first, &token.DefaultProbs, &initial, cfg.lambda, sseAgainst(cfg.target))
+			if gotLevels != wantLevels || gotStats != wantStats {
+				t.Errorf("%v cfg %+v: wrapper (%v, %+v) != with-probs default (%v, %+v)",
+					initial, cfg, wantLevels, wantStats, gotLevels, gotStats)
+			}
+
+			v := testVec(2, -1, 0, 4)
+			wantScore := scoreCoeffCandidate(cfg.plane, cfg.ctx, cfg.first, &v, cfg.lambda, sseAgainst(cfg.target))
+			gotScore := scoreCoeffCandidateWithProbs(cfg.plane, cfg.ctx, cfg.first, &token.DefaultProbs, &v, cfg.lambda, sseAgainst(cfg.target))
+			if gotScore != wantScore {
+				t.Errorf("score wrapper %d != with-probs default %d", wantScore, gotScore)
+			}
+		}
+	}
+}
+
+func TestSearchCoeffCandidatesWithProbsTieKeepsRetained(t *testing.T) {
+	custom := flippedProbs()
+	initial := testVec(3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+
+	// Lambda zero flattens every rate difference: all candidates tie
+	// at distortion-free score 0, and strict-less comparison must
+	// keep the retained input rather than any later offer.
+	winner, stats := searchCoeffCandidatesWithProbs(token.YWithDC, 1, 0, &custom, &initial, 0, zeroDistortion)
+	if stats.BestScore != 0 {
+		t.Fatalf("all-tie search reported score %d, want 0", stats.BestScore)
+	}
+	if stats.WinningOrdinal != 0 {
+		t.Errorf("tie resolved to ordinal %d, want 0 (retained)", stats.WinningOrdinal)
+	}
+	if winner != initial {
+		t.Errorf("tie changed levels to %v, want retained %v", winner, initial)
+	}
+	if stats.Improved {
+		t.Error("tie reported Improved=true, want false")
+	}
+
+	// Same shape with the default wrapper: a tie among later
+	// candidates must still keep the earlier one.
+	winner, stats = searchCoeffCandidates(token.YAfterY2, 0, 0, &initial, 0, zeroDistortion)
+	if stats.WinningOrdinal != 0 || winner != initial || stats.Improved {
+		t.Errorf("default wrapper broke a tie: (%v, ordinal %d, improved %v)", winner, stats.WinningOrdinal, stats.Improved)
+	}
+}

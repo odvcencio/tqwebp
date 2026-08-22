@@ -166,8 +166,10 @@ func enumerateCoeffCandidates(initial *[16]int16) (cands [][16]int16, enumerated
 }
 
 // searchCoeffCandidates enumerates the bounded candidate set around
-// initial levels, scores every unique candidate, and returns the
-// winning levels plus the counters and score of the pass.
+// initial levels, scores every unique candidate under the default
+// probability table, and returns the winning levels plus the counters
+// and score of the pass. It delegates to searchCoeffCandidatesWithProbs
+// with &token.DefaultProbs.
 //
 // Scoring compares strictly smaller values of
 //
@@ -180,6 +182,15 @@ func enumerateCoeffCandidates(initial *[16]int16) (cands [][16]int16, enumerated
 // second-guesses. The levels must be codable (magnitude at most
 // token.MaxLevel), mirroring cost.BlockCost's own refusal otherwise.
 func searchCoeffCandidates(plane, ctx, first int, initial *[16]int16, lambda int64, distortion spatialDistortionFn) ([16]int16, coeffSearchStats) {
+	return searchCoeffCandidatesWithProbs(plane, ctx, first, &token.DefaultProbs, initial, lambda, distortion)
+}
+
+// searchCoeffCandidatesWithProbs is searchCoeffCandidates with a
+// caller-supplied probability table: every unique candidate is priced
+// through cost.BlockCost under exactly the supplied probs -- no
+// candidate ever falls back to another table -- and ties are resolved
+// by strict-smaller comparison only, keeping the earliest candidate.
+func searchCoeffCandidatesWithProbs(plane, ctx, first int, probs *token.Probs, initial *[16]int16, lambda int64, distortion spatialDistortionFn) ([16]int16, coeffSearchStats) {
 	var stats coeffSearchStats
 
 	cands, enumerated := enumerateCoeffCandidates(initial)
@@ -189,9 +200,9 @@ func searchCoeffCandidates(plane, ctx, first int, initial *[16]int16, lambda int
 
 	best := cands[0]
 	stats.WinningOrdinal = 0
-	stats.BestScore = scoreCoeffCandidate(plane, ctx, first, &best, lambda, distortion)
+	stats.BestScore = scoreCoeffCandidateWithProbs(plane, ctx, first, probs, &best, lambda, distortion)
 	for ord := 1; ord < len(cands); ord++ {
-		score := scoreCoeffCandidate(plane, ctx, first, &cands[ord], lambda, distortion)
+		score := scoreCoeffCandidateWithProbs(plane, ctx, first, probs, &cands[ord], lambda, distortion)
 		if score < stats.BestScore { // strictly smaller: ties keep earliest
 			stats.BestScore = score
 			best = cands[ord]
@@ -207,7 +218,14 @@ func searchCoeffCandidates(plane, ctx, first int, initial *[16]int16, lambda int
 // the trade-off: the caller-supplied spatial distortion times 256 plus
 // lambda times the exact token rate that cost.BlockCost charges for
 // the supplied plane, neighbour context, and start position under the
-// default probability table.
+// default probability table. It delegates to scoreCoeffCandidateWithProbs.
 func scoreCoeffCandidate(plane, ctx, first int, levels *[16]int16, lambda int64, distortion spatialDistortionFn) int64 {
-	return distortion(levels)*256 + lambda*int64(cost.BlockCost(plane, ctx, first, levels, &token.DefaultProbs))
+	return scoreCoeffCandidateWithProbs(plane, ctx, first, &token.DefaultProbs, levels, lambda, distortion)
+}
+
+// scoreCoeffCandidateWithProbs is scoreCoeffCandidate with a
+// caller-supplied probability table; the token rate comes from
+// cost.BlockCost under exactly the supplied probs.
+func scoreCoeffCandidateWithProbs(plane, ctx, first int, probs *token.Probs, levels *[16]int16, lambda int64, distortion spatialDistortionFn) int64 {
+	return distortion(levels)*256 + lambda*int64(cost.BlockCost(plane, ctx, first, levels, probs))
 }

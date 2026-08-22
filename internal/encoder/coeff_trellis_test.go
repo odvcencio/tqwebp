@@ -429,3 +429,354 @@ func TestCoeffTrellisEndHereNeedsZeroableSuffix(t *testing.T) {
 		}
 	}
 }
+
+// trellisSkewedProbs returns a deliberately skewed probability table:
+// deterministic, far from the defaults, and pushed toward certainty so
+// any table-plumbing mistake shows up as an exact-cost mismatch.
+func trellisSkewedProbs() *token.Probs {
+	p := new(token.Probs)
+	for i := range p {
+		for j := range p[i] {
+			for k := range p[i][j] {
+				for l := range p[i][j][k] {
+					if (i+j+k+l)%2 == 0 {
+						p[i][j][k][l] = 255
+					} else {
+						p[i][j][k][l] = 1
+					}
+				}
+			}
+		}
+	}
+	return p
+}
+
+// TestCoeffTrellisDefaultWrappersMatchExplicit proves each default
+// wrapper equals its explicit-default WithProbs variant exactly.
+func TestCoeffTrellisDefaultWrappersMatchExplicit(t *testing.T) {
+	blocks := [][16]int16{
+		trellisLevels(),
+		trellisLevels(2, 1),
+		trellisLevels(15, -1),
+		trellisLevels(0, -1, 14, 1),
+		trellisLevels(1, 4, 3, -5, 6, 10, 8, -11),
+	}
+	for _, levels := range blocks {
+		for plane := 0; plane < token.NumPlanes; plane++ {
+			for ctx := 0; ctx <= 2; ctx++ {
+				got := trellisPathRate(plane, ctx, 0, &levels)
+				want := trellisPathRateWithProbs(plane, ctx, 0, &levels, &token.DefaultProbs)
+				if got != want {
+					t.Errorf("path: plane %d ctx %d: wrapper=%d WithProbs(default)=%d",
+						plane, ctx, got, want)
+				}
+
+				// Tail: positions after lastPos hold at least one nonzero.
+				tailLevels := trellisLevels(0, -1, 9, token.MaxLevel, 14, -2)
+				gotTail := trellisTailRate(plane, 8, ctx, &tailLevels)
+				wantTail := trellisTailRateWithProbs(plane, 8, ctx, &tailLevels, &token.DefaultProbs)
+				if gotTail != wantTail {
+					t.Errorf("tail: plane %d ctx %d: wrapper=%d WithProbs(default)=%d",
+						plane, ctx, gotTail, wantTail)
+				}
+			}
+		}
+	}
+}
+
+// TestCoeffTrellisTailOfDefaultWrapperMatchesExplicit proves the
+// trellisTailOf default wrapper equals trellisTailOfWithProbs priced
+// with &token.DefaultProbs exactly -- hasNZ verdicts and all three
+// exiting-context rates -- for empty and non-empty tails, and that a
+// skewed table actually changes the price so the plumbing is live.
+func TestCoeffTrellisTailOfDefaultWrapperMatchesExplicit(t *testing.T) {
+	cases := []struct {
+		name   string
+		last   int
+		levels [16]int16
+	}{
+		{"empty-tail", 15, trellisLevels(0, -1)},
+		{"tail-nonzero", 8, trellisLevels(0, -1, 9, token.MaxLevel, 14, -2)},
+		{"tail-single-one", 13, trellisLevels(2, 1, 14, 1)},
+	}
+	skewed := trellisSkewedProbs()
+	for _, tc := range cases {
+		for plane := 0; plane < token.NumPlanes; plane++ {
+			got := trellisTailOf(plane, tc.last, &tc.levels)
+			want := trellisTailOfWithProbs(plane, tc.last, &tc.levels, &token.DefaultProbs)
+			if got != want {
+				t.Errorf("%s: plane %d: tail=%+v WithProbs(default)=%+v",
+					tc.name, plane, got, want)
+			}
+			skew := trellisTailOfWithProbs(plane, tc.last, &tc.levels, skewed)
+			if skew.hasNZ && skew == want {
+				t.Errorf("%s: plane %d: skewed table priced identically to defaults", tc.name, plane)
+			}
+		}
+	}
+}
+
+// TestCoeffTrellisPathRateWithProbsParity proves trellisPathRateWithProbs
+// under a deliberately skewed table equals cost.BlockCost priced with
+// that same table, on representative codable blocks.
+func TestCoeffTrellisPathRateWithProbsParity(t *testing.T) {
+	skewed := trellisSkewedProbs()
+	cases := []struct {
+		name   string
+		levels [16]int16
+	}{
+		{"empty", trellisLevels()},
+		{"early-eob-single-one", trellisLevels(2, 1)},
+		{"final-eob-last-position", trellisLevels(15, -1)},
+		{"interior-zero-run", trellisLevels(0, -1, 14, 1)},
+		{"small-magnitudes-mixed-signs", trellisLevels(0, 1, 1, -1, 4, 2, 7, -2)},
+		{"category-boundaries", trellisLevels(1, 4, 3, -5, 6, 10, 8, -11)},
+		{"large-category-boundaries", trellisLevels(2, 34, 5, -35, 9, token.MaxLevel)},
+	}
+	for _, tc := range cases {
+		for plane := 0; plane < token.NumPlanes; plane++ {
+			for ctx := 0; ctx <= 2; ctx++ {
+				got := trellisPathRateWithProbs(plane, ctx, 0, &tc.levels, skewed)
+				want := cost.BlockCost(plane, ctx, 0, &tc.levels, skewed)
+				if got != want {
+					t.Errorf("%s: plane %d ctx %d: trellisPathRateWithProbs=%d cost.BlockCost(skewed)=%d",
+						tc.name, plane, ctx, got, want)
+				}
+			}
+		}
+	}
+}
+
+// TestCoeffTrellisRunDefaultWrapperMatchesExplicit proves the default
+// run wrapper equals the explicit-default WithProbs run exactly:
+// winner levels and every stats counter and flag, over reduced-window,
+// whole-scan, and baseline-bearing configurations.
+func TestCoeffTrellisRunDefaultWrapperMatchesExplicit(t *testing.T) {
+	const (
+		plane  = token.YWithDC
+		ctx    = 1
+		lambda = 300
+	)
+	dist := func(levels *[16]int16) int64 {
+		var s int64
+		for _, v := range *levels {
+			s += int64(v) * int64(v)
+		}
+		return s
+	}
+	cases := []struct {
+		name      string
+		cfg       trellisConfig
+		retained  [16]int16
+		baselines int
+	}{
+		{"whole-scan", trellisWholeScan,
+			trellisLevels(1, -2, 4, 3, 7, -5, 13, 2), 0},
+		{"whole-scan-with-baselines", trellisWholeScan,
+			trellisLevels(1, -2, 4, 3, 7, -5, 13, 2), 2},
+		{"reduced-window", trellisConfig{firstPos: 2, lastPos: 5},
+			trellisLevels(2, 3, 3, -2, 4, 1, 5, 4), 1},
+		{"reduced-window-empty-tail", trellisConfig{firstPos: 4, lastPos: 15},
+			trellisLevels(4, -9, 8, 12, 14, -34), 0},
+	}
+	for _, tc := range cases {
+		retained := tc.retained
+		baselines := [][16]int16{retained}
+		for i := 1; i < tc.baselines; i++ {
+			baselines = append(baselines, trellisLevels(0, i))
+		}
+		gotWrapper, statsWrapper := runCoeffTrellis(tc.cfg, plane, ctx,
+			&retained, lambda, dist, baselines...)
+		gotExplicit, statsExplicit := runCoeffTrellisWithProbs(tc.cfg, plane, ctx,
+			&retained, lambda, dist, &token.DefaultProbs, baselines...)
+		if gotWrapper != gotExplicit {
+			t.Errorf("%s: wrapper winner %v != explicit-default winner %v",
+				tc.name, gotWrapper, gotExplicit)
+		}
+		if statsWrapper != statsExplicit {
+			t.Errorf("%s: wrapper stats %+v != explicit-default stats %+v",
+				tc.name, statsWrapper, statsExplicit)
+		}
+	}
+}
+
+// TestCoeffTrellisRunWithSkewedTableDeterministic proves a skewed-table
+// run is deterministic -- repeated runs return identical winners and
+// identical stats -- and that the skewed table is actually live by
+// producing a different objective from the default run.
+func TestCoeffTrellisRunWithSkewedTableDeterministic(t *testing.T) {
+	const (
+		plane  = token.YWithDC
+		ctx    = 1
+		lambda = 300
+	)
+	dist := func(levels *[16]int16) int64 {
+		var s int64
+		for _, v := range *levels {
+			s += int64(v) * int64(v)
+		}
+		return s
+	}
+	cfg := trellisWholeScan
+	retained := trellisLevels(0, -1, 3, 6, 6, -11, 10, 4, 14, 21)
+	baselines := [][16]int16{retained}
+
+	gotA, statsA := runCoeffTrellisWithProbs(cfg, plane, ctx, &retained,
+		lambda, dist, trellisSkewedProbs(), baselines...)
+	gotB, statsB := runCoeffTrellisWithProbs(cfg, plane, ctx, &retained,
+		lambda, dist, trellisSkewedProbs(), baselines...)
+	if gotA != gotB || statsA != statsB {
+		t.Errorf("skewed runs diverged: %v/%+v vs %v/%+v",
+			gotA, statsA, gotB, statsB)
+	}
+
+	gotDefault, _ := runCoeffTrellis(cfg, plane, ctx, &retained,
+		lambda, dist, baselines...)
+	skewedScore := int64(dist(&gotA))*256 +
+		lambda*int64(cost.BlockCost(plane, ctx, cfg.firstPos, &gotA, trellisSkewedProbs()))
+	defaultScore := int64(dist(&gotDefault))*256 +
+		lambda*int64(cost.BlockCost(plane, ctx, cfg.firstPos, &gotDefault, &token.DefaultProbs))
+	if skewedScore == defaultScore {
+		t.Errorf("skewed-table objective %d equals default objective %d; plumbing appears inert",
+			skewedScore, defaultScore)
+	}
+}
+
+// TestCoeffTrellisCustomTableFinalSelection proves the final selection
+// under a custom probability table matches an independently computed
+// objective -- crafted additive distortion times 256 plus lambda times
+// cost.BlockCost priced with that same table -- over an exhaustive
+// enumeration of the documented per-position choice sets in a reduced
+// window, and that strict-earliest tie-breaking retains baselines[0]
+// when every candidate scores identically under that table.
+func TestCoeffTrellisCustomTableFinalSelection(t *testing.T) {
+	const (
+		plane  = token.YWithDC
+		ctx    = 1
+		lambda = 300
+		first  = 2
+		last   = 5
+	)
+
+	custom := new(token.Probs)
+	for i := range custom {
+		for j := range custom[i] {
+			for k := range custom[i][j] {
+				for l := range custom[i][j][k] {
+					custom[i][j][k][l] = uint8((i*31 + j*7 + k*3 + l*13) % 256)
+				}
+			}
+		}
+	}
+
+	retained := trellisLevels(2, 3, 3, -2, 4, 1, 5, 4)
+
+	// Separable quadratic distortion keeps the marginal probes exact.
+	var weight, target [16]int64
+	weight[2], target[2] = 3000, 3
+	weight[3], target[3] = 2000, -1
+	weight[4], target[4] = 2500, 1
+	weight[5], target[5] = 400, 3
+	dist := func(levels *[16]int16) int64 {
+		var s int64
+		for i := 0; i < 16; i++ {
+			d := int64(levels[i]) - target[i]
+			s += weight[i] * d * d
+		}
+		return s
+	}
+	score := func(levels *[16]int16) int64 {
+		return dist(levels)*256 +
+			lambda*int64(cost.BlockCost(plane, ctx, first, levels, custom))
+	}
+
+	// Independent rebuild of the documented choice-set rule.
+	window := []int{first, 3, 4, last}
+	sets := make([][]int16, len(window))
+	for k, p := range window {
+		r := retained[p]
+		var cs []int16
+		add := func(x int16) {
+			for _, v := range cs {
+				if v == x {
+					return
+				}
+			}
+			cs = append(cs, x)
+		}
+		add(r)
+		if r > 0 {
+			add(r - 1)
+		} else if r < 0 {
+			add(r + 1)
+		}
+		add(0)
+		sets[k] = cs
+	}
+
+	// Exhaustive odometer enumeration under the custom-table objective;
+	// strictly-smaller replacement preserves enumeration-order ties.
+	idx := make([]int, len(window))
+	firstCombo := true
+	var oracleBest [16]int16
+	var oracleScore int64
+	for {
+		cand := retained
+		for k, p := range window {
+			cand[p] = sets[k][idx[k]]
+		}
+		if s := score(&cand); firstCombo || s < oracleScore {
+			oracleBest, oracleScore = cand, s
+			firstCombo = false
+		}
+		k := len(window) - 1
+		for k >= 0 {
+			idx[k]++
+			if idx[k] < len(sets[k]) {
+				break
+			}
+			idx[k] = 0
+			k--
+		}
+		if k < 0 {
+			break
+		}
+	}
+	if oracleBest == retained {
+		t.Fatalf("custom-table exhaustive winner %v equals retained; case proves nothing", oracleBest)
+	}
+
+	got, stats := runCoeffTrellisWithProbs(trellisConfig{firstPos: first, lastPos: last},
+		plane, ctx, &retained, lambda, dist, custom)
+	if got != oracleBest {
+		t.Errorf("custom-table winner %v, exhaustive winner %v", got, oracleBest)
+	}
+	if want := oracleScore; stats.BestScore != want {
+		t.Errorf("custom-table BestScore %d, independently computed objective %d", stats.BestScore, want)
+	}
+	if !stats.TrellisWon {
+		t.Errorf("TrellisWon=false under the custom table")
+	}
+
+	// Strict-earliest ties under the same custom table: zero lambda and
+	// a constant distortion score every candidate identically, so the
+	// strictly-smaller replacement rule must retain baselines[0].
+	constantDist := func(*[16]int16) int64 { return 42 }
+	baselineOther := trellisLevels(0, 4, 3, -3)
+	tieRetained := retained
+	tieGot, tieStats := runCoeffTrellisWithProbs(trellisWholeScan, plane, ctx,
+		&tieRetained, 0, constantDist, custom, tieRetained, baselineOther)
+	if tieGot != tieRetained {
+		t.Errorf("exact tie: returned %v, want earlier baseline %v", tieGot, tieRetained)
+	}
+	if tieStats.TrellisWon || tieStats.Improved {
+		t.Errorf("exact tie: TrellisWon=%v Improved=%v, want both false",
+			tieStats.TrellisWon, tieStats.Improved)
+	}
+	if want := int64(cost.Unit * 42); tieStats.BestScore != want {
+		t.Errorf("exact tie: BestScore=%d, want %d", tieStats.BestScore, want)
+	}
+	if tieStats.ExactScorings != 3 {
+		t.Errorf("exact tie: ExactScorings=%d, want 3", tieStats.ExactScorings)
+	}
+}

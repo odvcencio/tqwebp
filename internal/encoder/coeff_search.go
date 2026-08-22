@@ -116,8 +116,12 @@ func (e *encoder) spatialDistortionFor(src []uint8, srcStride int, pred []uint8)
 // what the 5B search alone would have kept, and strict ties keep that
 // earlier baseline.
 func (e *encoder) refineBlockLevels(ctx int, levels *[16]int16, dist spatialDistortionFn) ([16]int16, coeffSearchStats) {
+	return e.refineBlockLevelsWithProbs(ctx, levels, dist, &token.DefaultProbs)
+}
+
+func (e *encoder) refineBlockLevelsWithProbs(ctx int, levels *[16]int16, dist spatialDistortionFn, probs *token.Probs) ([16]int16, coeffSearchStats) {
 	retained := *levels
-	winner, stats := searchCoeffCandidates(token.YWithDC, ctx, 0, levels, e.lambda, dist)
+	winner, stats := searchCoeffCandidatesWithProbs(token.YWithDC, ctx, 0, probs, levels, e.lambda, dist)
 	e.rd.CoeffBlocksSearched++
 	e.rd.CoeffCandidatesScored += int64(stats.CandidatesScored)
 	if stats.Improved {
@@ -125,8 +129,8 @@ func (e *encoder) refineBlockLevels(ctx int, levels *[16]int16, dist spatialDist
 	}
 	if e.coeffTrellisAllowed() {
 		s5b := winner
-		final, tstats := runCoeffTrellis(trellisWholeScan, token.YWithDC, ctx, &retained,
-			e.lambda, dist, retained, s5b)
+		final, tstats := runCoeffTrellisWithProbs(trellisWholeScan, token.YWithDC, ctx, &retained,
+			e.lambda, dist, probs, retained, s5b)
 		if final != s5b {
 			e.rd.TrellisBlocksChanged++
 		}

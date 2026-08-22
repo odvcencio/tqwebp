@@ -86,6 +86,12 @@ type encoder struct {
 	// encoder's own reconstruction, which the exact-match test needs.
 	filterLevel int
 
+	// rateProbs is the immutable token probability table used by Method 6
+	// RD and refinement pricing. It is read-only throughout a frame; the
+	// default value is the standard VP8 coefficient probability table, so
+	// behavior matches pricing directly against token.DefaultProbs.
+	rateProbs *token.Probs
+
 	// forceBPred makes every macroblock take the B_PRED luma path of
 	// work package WP-2 slice 2A, bypassing selection. It exists so
 	// tests can drive the coding path directly; production encodes go
@@ -180,6 +186,7 @@ func newEncoder(src *yuv.Planes, cfg Config) *encoder {
 		mbs:          make([]macroblock, src.MBW*src.MBH),
 		subCtxAbove:  make([][4]predict.SubMode, src.MBW),
 		lambda:       cost.Lambda(q),
+		rateProbs:    &token.DefaultProbs,
 		rdTokenAbove: make([]mbContext, src.MBW),
 		rdSubAbove:   make([][4]predict.SubMode, src.MBW),
 	}
