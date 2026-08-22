@@ -141,6 +141,12 @@ type encoder struct {
 	// it to isolate the two layers' contributions.
 	rdCoeffTrellisOff bool
 
+	// rdProbOptOff disables the Slice 6A token-probability refinement,
+	// which production runs at Method 6 and above. Tests set it to
+	// isolate that layer's contribution, exactly as rdCoeffOptOff and
+	// rdCoeffTrellisOff do for theirs.
+	rdProbOptOff bool
+
 	// Scratch buffers, one macroblock wide, reused across the frame.
 	predY [16 * 16]uint8
 	bestY [16 * 16]uint8
@@ -530,6 +536,16 @@ func (e *encoder) writeFile(w io.Writer) error {
 func (e *encoder) frameBytes() ([]byte, error) {
 	skipProb := e.skipProbability()
 
+	// Slice 6A: at Method 6 the token probabilities are measured from
+	// the final macroblocks and only strictly-profitable updates ship.
+	// One derivation feeds both the header and the partition, so the two
+	// cannot disagree. Methods below the boundary, and Method 6 encodes
+	// where nothing wins, keep the default table.
+	var tokenProbs *token.Probs
+	if e.cfg.Method >= minProbOptMethod {
+		tokenProbs = e.optimizeTokenProbs()
+	}
+
 	first := boolenc.New(1024 + len(e.mbs)*2)
 	frame.WriteHeader(first, frame.Header{
 		Width:           e.src.Width,
@@ -539,6 +555,7 @@ func (e *encoder) frameBytes() ([]byte, error) {
 		FilterSharpness: 0,
 		QuantIndex:      int(e.q.Index),
 		SkipProb:        skipProb,
+		TokenProbs:      tokenProbs,
 	})
 	// Per-macroblock prediction records, in raster order. The sub-mode
 	// contexts mirror the decoder's own state: one four-entry vector per
@@ -575,7 +592,7 @@ func (e *encoder) frameBytes() ([]byte, error) {
 		}
 	}
 
-	tokens := e.writeTokens()
+	tokens := e.writeTokens(tokenProbs)
 	return frame.Assemble(e.src.Width, e.src.Height, first.Finish(), tokens)
 }
 

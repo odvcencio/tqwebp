@@ -44,6 +44,13 @@ type Header struct {
 	// SkipProb is the probability that a macroblock is not skipped, on a
 	// scale of 256. It must be 1 or more.
 	SkipProb uint8
+	// TokenProbs, when not nil, is the coefficient probability table the
+	// token partition codes against. WriteHeader signals exactly the
+	// entries that differ from the default table and leaves the rest at
+	// their defaults, so the decoder reconstructs this table before it
+	// reads any tokens. A nil keeps the default table and writes one
+	// "no update" decision per entry, byte for byte as earlier releases.
+	TokenProbs *token.Probs
 }
 
 // WriteHeader writes the header fields of the first partition, in the
@@ -76,9 +83,10 @@ func WriteHeader(enc *boolenc.Encoder, h Header) {
 	// Section 9.7: a key frame refreshes the entropy probabilities.
 	enc.WriteFlag(true)
 
-	// Section 9.8: coefficient probability updates. WP-1 keeps the
-	// defaults, so every gate says "no update".
-	token.WriteProbUpdates(enc)
+	// Section 9.8: coefficient probability updates. A nil TokenProbs
+	// keeps the defaults, so every gate says "no update"; a table
+	// signals exactly its differences from the defaults.
+	token.WriteProbs(enc, h.TokenProbs)
 
 	// Section 9.10: the skip flag is in use, with its probability.
 	enc.WriteFlag(true)

@@ -2,6 +2,7 @@ package encoder
 
 import (
 	"m31labs.dev/tqwebp/internal/boolenc"
+	"m31labs.dev/tqwebp/internal/cost"
 	"m31labs.dev/tqwebp/internal/predict"
 	"m31labs.dev/tqwebp/internal/token"
 )
@@ -67,6 +68,13 @@ func writeChromaMode(enc *boolenc.Encoder, m predict.Mode) {
 	}
 }
 
+// minProbOptMethod is the lowest effort level whose encode measures the
+// real token statistics and writes per-node coefficient-probability
+// updates. It mirrors minCoeffTrellisMethod: both refinements price
+// exactly and ship only strict wins, and both cost a full extra pass, so
+// they sit behind the same effort boundary.
+const minProbOptMethod = 6
+
 // mbContext holds the coefficient contexts one macroblock hands to its
 // neighbours. The decoder keeps the same state in its own left and above
 // records, so the encoder must update it in the same order.
@@ -82,11 +90,43 @@ type mbContext struct {
 	v [2]uint8
 }
 
-// writeTokens codes every macroblock's coefficients into the single token
-// partition, in raster order, and returns the finished partition.
-func (e *encoder) writeTokens() []byte {
+// writeTokens codes every macroblock's coefficients into the single
+// token partition, in raster order, against probs -- the table the frame
+// header signalled, nil meaning the defaults -- and returns the finished
+// partition.
+func (e *encoder) writeTokens(probs *token.Probs) []byte {
+	if probs == nil {
+		probs = &token.DefaultProbs
+	}
 	enc := boolenc.New(4096 + len(e.mbs)*16)
-	w := token.NewWriter(enc, &token.DefaultProbs)
+	w := token.NewWriter(enc, probs)
+	e.codeTokens(w)
+	return enc.Finish()
+}
+
+// optimizeTokenProbs runs the Slice 6A dry histogram pass: it walks the
+// final macroblocks once with a token.Writer that emits into a throwaway
+// buffer while an observer records every branch decision, then derives
+// the strictly-profitable probability updates. It returns nil -- meaning
+// keep the default table -- at methods below minProbOptMethod and when
+// no update's exact ledger is a strict win. The walk is the same
+// codeTokens traversal production uses, so the counts describe exactly
+// what the partition will contain.
+func (e *encoder) optimizeTokenProbs() *token.Probs {
+	if e.cfg.Method < minProbOptMethod || e.rdProbOptOff {
+		return nil
+	}
+	sink := boolenc.New(4096 + len(e.mbs)*16)
+	w := token.NewWriter(sink, &token.DefaultProbs)
+	hist := &cost.Histogram{}
+	w.SetObserver(hist)
+	e.codeTokens(w)
+	return hist.Optimize(&token.DefaultProbs)
+}
+
+// codeTokens walks the macroblocks in raster order and codes every block
+// into w, updating the neighbour contexts exactly as the decoder does.
+func (e *encoder) codeTokens(w *token.Writer) {
 
 	above := make([]mbContext, e.mbw)
 	var left mbContext
@@ -143,7 +183,6 @@ func (e *encoder) writeTokens() []byte {
 			e.writeChromaTokens(w, mb, blockV, &left.v, &up.v)
 		}
 	}
-	return enc.Finish()
 }
 
 // writeChromaTokens codes the four blocks of one chroma plane and updates

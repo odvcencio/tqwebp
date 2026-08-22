@@ -43,7 +43,10 @@ func encodeMethod(t *testing.T, img image.Image, cfg Config, tune ...func(*encod
 // both sides: a Method 6 encode whose search is test-disabled writes
 // exactly a Method 5 encode's bytes and reports exactly its counters,
 // proving the disabled path never diverges from the retained-level
-// writer.
+// writer. The Slice 6A probability layer is test-disabled alongside it,
+// so this comparison isolates the coefficient search exactly as before;
+// the probability layer's own boundary is pinned by
+// TestProbOptMethodBoundary.
 func TestCoeffSearchDisabledEqualsMethod5(t *testing.T) {
 	for _, spec := range []struct {
 		name string
@@ -57,7 +60,7 @@ func TestCoeffSearchDisabledEqualsMethod5(t *testing.T) {
 		t.Run(spec.name, func(t *testing.T) {
 			m5Data, m5Stats := encodeMethod(t, spec.img, Config{Quality: spec.q, Method: 5})
 			m6OffData, m6OffStats := encodeMethod(t, spec.img, Config{Quality: spec.q, Method: 6},
-				func(e *encoder) { e.rdCoeffOptOff = true })
+				func(e *encoder) { e.rdCoeffOptOff = true; e.rdProbOptOff = true })
 			if !bytes.Equal(m5Data, m6OffData) {
 				t.Fatalf("disabled Method 6 wrote different bytes: %d vs %d", len(m5Data), len(m6OffData))
 			}

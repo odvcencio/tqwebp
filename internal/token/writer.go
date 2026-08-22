@@ -2,17 +2,47 @@ package token
 
 import "m31labs.dev/tqwebp/internal/boolenc"
 
+// Observer receives one call per boolean branch a WriteBlock codes.
+// Slice 6A attaches it during the dry histogram pass that measures the
+// frame's real token statistics without touching the coded output; the
+// production path runs with no observer attached.
+//
+// Implementations receive the branch coordinates (plane 0 to NumPlanes-1,
+// band 0 to NumBands-1, context 0 to NumContexts-1, node 0 to
+// NumProbs-1) and the coded bit, where true is the taken side exactly as
+// boolenc.WriteBool defines it. The writer calls the observer in coding
+// order, immediately before emitting each branch.
+type Observer interface {
+	ObserveBranch(plane, band, ctx, node int, bit bool)
+}
+
 // Writer codes quantized coefficient blocks into a boolean-coded
 // partition. Create one per token partition.
 type Writer struct {
-	enc   *boolenc.Encoder
-	probs *Probs
+	enc      *boolenc.Encoder
+	probs    *Probs
+	observer Observer
 }
 
 // NewWriter returns a Writer that codes into enc against the probability
 // table probs. The table must be the one the frame header signalled.
 func NewWriter(enc *boolenc.Encoder, probs *Probs) *Writer {
 	return &Writer{enc: enc, probs: probs}
+}
+
+// SetObserver attaches obs to w, replacing any earlier observer. A nil
+// obs detaches the current one. Observation is passive: it never changes
+// what WriteBlock codes.
+func (w *Writer) SetObserver(obs Observer) { w.observer = obs }
+
+// branch codes one boolean decision and reports it to the observer.
+// Keeping the report beside the emission makes the histogram exact by
+// construction: whatever the writer codes, the observer sees.
+func (w *Writer) branch(plane, band, ctx, node int, prob uint8, bit bool) {
+	if w.observer != nil {
+		w.observer.ObserveBranch(plane, band, ctx, node, bit)
+	}
+	w.enc.WriteBool(prob, bit)
 }
 
 // WriteBlock codes one 4x4 block and reports whether the block carried
@@ -35,25 +65,29 @@ func (w *Writer) WriteBlock(plane int, ctx int, first int, levels *[16]int16) bo
 
 	planeProbs := &w.probs[plane]
 	n := first
-	p := &planeProbs[Bands[n]][ctx]
+	band := int(Bands[n])
+	ctx0 := ctx
+	p := &planeProbs[band][ctx0]
 
 	if last < 0 {
 		// End of block before any coefficient: the block is empty.
-		w.enc.WriteBool(p[0], false)
+		w.branch(plane, band, ctx0, 0, p[0], false)
 		return false
 	}
-	w.enc.WriteBool(p[0], true)
+	w.branch(plane, band, ctx0, 0, p[0], true)
 
 	for n < 16 {
 		v := levels[n]
 		if v == 0 {
-			w.enc.WriteBool(p[1], false)
+			w.branch(plane, band, ctx0, 1, p[1], false)
 			n++
-			p = &planeProbs[Bands[n]][0]
+			band = int(Bands[n])
+			ctx0 = 0
+			p = &planeProbs[band][ctx0]
 			continue
 		}
 
-		w.enc.WriteBool(p[1], true)
+		w.branch(plane, band, ctx0, 1, p[1], true)
 		mag := v
 		if mag < 0 {
 			mag = -mag
@@ -64,11 +98,11 @@ func (w *Writer) WriteBlock(plane int, ctx int, first int, levels *[16]int16) bo
 
 		nextCtx := 2
 		if mag == 1 {
-			w.enc.WriteBool(p[2], false)
+			w.branch(plane, band, ctx0, 2, p[2], false)
 			nextCtx = 1
 		} else {
-			w.enc.WriteBool(p[2], true)
-			w.writeMagnitude(p, int(mag))
+			w.branch(plane, band, ctx0, 2, p[2], true)
+			w.writeMagnitude(plane, band, ctx0, p, int(mag))
 		}
 		w.enc.WriteBool(128, v < 0)
 
@@ -76,13 +110,15 @@ func (w *Writer) WriteBlock(plane int, ctx int, first int, levels *[16]int16) bo
 		if n == 16 {
 			return true
 		}
-		p = &planeProbs[Bands[n]][nextCtx]
+		band = int(Bands[n])
+		ctx0 = nextCtx
+		p = &planeProbs[band][ctx0]
 		if n > last {
 			// No coefficient is left: end the block.
-			w.enc.WriteBool(p[0], false)
+			w.branch(plane, band, ctx0, 0, p[0], false)
 			return true
 		}
-		w.enc.WriteBool(p[0], true)
+		w.branch(plane, band, ctx0, 0, p[0], true)
 	}
 	return true
 }
@@ -90,41 +126,44 @@ func (w *Writer) WriteBlock(plane int, ctx int, first int, levels *[16]int16) bo
 // writeMagnitude codes a magnitude of two or more, RFC 6386 section 13.2.
 // The tree splits at 2, at 3 or 4, at the two small categories, and then
 // at the four large categories, each of which carries its magnitude as
-// extra bits with their own probabilities.
-func (w *Writer) writeMagnitude(p *[NumProbs]uint8, mag int) {
+// extra bits with their own probabilities. The branch probabilities it
+// reads from p carry the node indices 3 to 10 of the token tree; the
+// fixed extra-bit probabilities that follow are normative constants with
+// no header slot, so only the p-branches are reported to the observer.
+func (w *Writer) writeMagnitude(plane, band, ctx int, p *[NumProbs]uint8, mag int) {
 	switch {
 	case mag <= 4:
-		w.enc.WriteBool(p[3], false)
+		w.branch(plane, band, ctx, 3, p[3], false)
 		if mag == 2 {
-			w.enc.WriteBool(p[4], false)
+			w.branch(plane, band, ctx, 4, p[4], false)
 			return
 		}
-		w.enc.WriteBool(p[4], true)
-		w.enc.WriteBool(p[5], mag == 4)
+		w.branch(plane, band, ctx, 4, p[4], true)
+		w.branch(plane, band, ctx, 5, p[5], mag == 4)
 
 	case mag <= 10:
-		w.enc.WriteBool(p[3], true)
-		w.enc.WriteBool(p[6], false)
+		w.branch(plane, band, ctx, 3, p[3], true)
+		w.branch(plane, band, ctx, 6, p[6], false)
 		if mag <= 6 {
 			// Category 1 covers 5 and 6.
-			w.enc.WriteBool(p[7], false)
+			w.branch(plane, band, ctx, 7, p[7], false)
 			w.enc.WriteBool(cat1Prob, mag == 6)
 			return
 		}
 		// Category 2 covers 7 to 10.
-		w.enc.WriteBool(p[7], true)
+		w.branch(plane, band, ctx, 7, p[7], true)
 		w.enc.WriteBool(cat2Prob0, (mag-7)>>1 == 1)
 		w.enc.WriteBool(cat2Prob1, (mag-7)&1 == 1)
 
 	default:
 		// Categories 3 to 6 cover 11 to 2114.
 		cat := categoryOf(mag)
-		w.enc.WriteBool(p[3], true)
-		w.enc.WriteBool(p[6], true)
+		w.branch(plane, band, ctx, 3, p[3], true)
+		w.branch(plane, band, ctx, 6, p[6], true)
 		b1 := cat >> 1
 		b0 := cat & 1
-		w.enc.WriteBool(p[8], b1 == 1)
-		w.enc.WriteBool(p[9+b1], b0 == 1)
+		w.branch(plane, band, ctx, 8, p[8], b1 == 1)
+		w.branch(plane, band, ctx, 9+b1, p[9+b1], b0 == 1)
 
 		bits := extraBits[cat]
 		rest := mag - categoryBase(cat)
@@ -147,17 +186,37 @@ func categoryOf(mag int) int {
 	return 3
 }
 
-// WriteProbUpdates writes one "no update" decision per coefficient
-// probability, which is what a frame that keeps the default table must
-// send (RFC 6386 section 13.4). WP-2 replaces this with real updates.
-func WriteProbUpdates(enc *boolenc.Encoder) {
+// WriteProbs writes the section 13.4 coefficient-probability update
+// stream that makes a decoder's running table equal table. A key frame
+// decodes from DefaultProbs, so an entry equal to the default needs one
+// "no update" gate decision and any other entry needs its gate decision
+// plus an 8-bit literal carrying the new probability, in exactly the
+// plane, band, context, node order the section fixes. A nil table keeps
+// the defaults and codes byte for byte what WriteProbUpdates writes.
+func WriteProbs(enc *boolenc.Encoder, table *Probs) {
 	for i := 0; i < NumPlanes; i++ {
 		for j := 0; j < NumBands; j++ {
 			for k := 0; k < NumContexts; k++ {
 				for l := 0; l < NumProbs; l++ {
-					enc.WriteBool(UpdateProbs[i][j][k][l], false)
+					p := DefaultProbs[i][j][k][l]
+					if table != nil {
+						p = table[i][j][k][l]
+					}
+					if p == DefaultProbs[i][j][k][l] {
+						enc.WriteBool(UpdateProbs[i][j][k][l], false)
+						continue
+					}
+					enc.WriteBool(UpdateProbs[i][j][k][l], true)
+					enc.WriteLiteral(uint32(p), 8)
 				}
 			}
 		}
 	}
+}
+
+// WriteProbUpdates writes one "no update" decision per coefficient
+// probability, which is what a frame that keeps the default table must
+// send (RFC 6386 section 13.4). It is WriteProbs with the default table.
+func WriteProbUpdates(enc *boolenc.Encoder) {
+	WriteProbs(enc, nil)
 }
