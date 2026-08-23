@@ -92,26 +92,48 @@ func TestBPredSelectorKeepsSmoothWholePath(t *testing.T) {
 	}
 }
 
-func TestAdmitBPredBoundaries(t *testing.T) {
+func TestPreferBPredRDBoundaries(t *testing.T) {
 	tests := []struct {
-		name                           string
-		wholeDist, bPredDist           int32
-		penalty                        int64
-		wholeCoefficients, bPredCoeffs int
-		want                           bool
+		name                 string
+		wholeDist, bPredDist int32
+		wholeRate, bPredRate lumaRateQ8
+		lambda               uint64
+		want                 bool
 	}{
-		{"all margins clear", 800, 600, 100, 20, 12, true},
-		{"absolute margin tie", 800, 700, 100, 20, 12, false},
-		{"relative margin tie", 800, 700, 50, 20, 12, false},
-		{"coefficient margin short", 800, 600, 100, 20, 13, false},
-		{"worse reconstruction", 800, 801, 1, 40, 0, false},
+		{name: "lower distortion", wholeDist: 100, bPredDist: 99, wholeRate: lumaRateQ8{control: 100, tokens: 200}, bPredRate: lumaRateQ8{control: 100, tokens: 200}, lambda: 1, want: true},
+		{name: "equal distortion lower control rate", wholeDist: 100, bPredDist: 100, wholeRate: lumaRateQ8{control: 101, tokens: 200}, bPredRate: lumaRateQ8{control: 100, tokens: 200}, lambda: 1, want: true},
+		{name: "equal distortion lower token rate", wholeDist: 100, bPredDist: 100, wholeRate: lumaRateQ8{control: 100, tokens: 201}, bPredRate: lumaRateQ8{control: 100, tokens: 200}, lambda: 1, want: true},
+		{name: "rate repays distortion", wholeDist: 100, bPredDist: 101, wholeRate: lumaRateQ8{tokens: 2}, bPredRate: lumaRateQ8{}, lambda: 256, want: true},
+		{name: "rate does not repay distortion", wholeDist: 100, bPredDist: 99, wholeRate: lumaRateQ8{}, bPredRate: lumaRateQ8{tokens: 1000}, lambda: 1, want: false},
+		{name: "exact tie stays whole", wholeDist: 100, bPredDist: 100, wholeRate: lumaRateQ8{control: 100, tokens: 200}, bPredRate: lumaRateQ8{control: 100, tokens: 200}, lambda: 999, want: false},
+		{name: "worse on both axes", wholeDist: 100, bPredDist: 101, wholeRate: lumaRateQ8{control: 100, tokens: 200}, bPredRate: lumaRateQ8{control: 101, tokens: 201}, lambda: 1, want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := admitBPred(tt.wholeDist, tt.bPredDist, tt.penalty, tt.wholeCoefficients, tt.bPredCoeffs)
+			got := preferBPred(tt.wholeDist, tt.bPredDist, tt.wholeRate, tt.bPredRate, tt.lambda)
 			if got != tt.want {
-				t.Fatalf("admitBPred(%d, %d, %d, %d, %d) = %v, want %v",
-					tt.wholeDist, tt.bPredDist, tt.penalty, tt.wholeCoefficients, tt.bPredCoeffs, got, tt.want)
+				t.Fatalf("preferBPred(%d, %d, %+v, %+v, %d) = %v, want %v",
+					tt.wholeDist, tt.bPredDist, tt.wholeRate, tt.bPredRate, tt.lambda, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBPredReconstructionPruneBoundaries(t *testing.T) {
+	tests := []struct {
+		name                 string
+		wholeDist, bPredDist int32
+		margin               int64
+		want                 bool
+	}{
+		{name: "clears margin", wholeDist: 200, bPredDist: 99, margin: 100, want: true},
+		{name: "margin tie", wholeDist: 200, bPredDist: 100, margin: 100, want: false},
+		{name: "worse candidate", wholeDist: 100, bPredDist: 101, margin: 0, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := bPredImprovesReconstruction(tt.wholeDist, tt.bPredDist, tt.margin); got != tt.want {
+				t.Fatalf("bPredImprovesReconstruction(%d, %d, %d) = %v, want %v", tt.wholeDist, tt.bPredDist, tt.margin, got, tt.want)
 			}
 		})
 	}
@@ -139,9 +161,21 @@ func TestSearchedBModesUseCanonicalTie(t *testing.T) {
 		}
 	}
 	assertNoY2(t, 3, &mb)
-	if got := lumaCoefficientCount(&mb); got != 0 {
+	if got := testLumaCoefficientCount(&mb); got != 0 {
 		t.Fatalf("flat searched macroblock has %d coefficients, want 0", got)
 	}
+}
+
+func testLumaCoefficientCount(mb *macroblock) int {
+	count := 0
+	for block := blockY2; block < blockLuma+16; block++ {
+		for _, level := range mb.levels[block] {
+			if level != 0 {
+				count++
+			}
+		}
+	}
+	return count
 }
 
 func TestCopyLuma16RoundTripAtSingleMacroblockStride(t *testing.T) {

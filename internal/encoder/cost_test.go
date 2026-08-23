@@ -207,6 +207,105 @@ func TestBPredMacroblockCostMatchesSyntaxAndContexts(t *testing.T) {
 	}
 }
 
+func TestLumaBoundaryContextsComeFromSelectedNeighbors(t *testing.T) {
+	enc := &encoder{
+		mbw:        2,
+		mbh:        2,
+		mbs:        make([]macroblock, 4),
+		bPredModes: make([][16]predict.BMode, 4),
+	}
+
+	above := &enc.mbs[1]
+	above.useBPred = true
+	enc.bPredModes[1][12] = predict.BTM
+	enc.bPredModes[1][13] = predict.BVE
+	enc.bPredModes[1][14] = predict.BHE
+	enc.bPredModes[1][15] = predict.BRD
+	above.nz[blockLuma+12] = true
+	above.nz[blockLuma+14] = true
+
+	left := &enc.mbs[2]
+	left.yMode = predict.H
+	left.nz[blockLuma+7] = true
+	left.nz[blockLuma+15] = true
+
+	leftNZ, aboveNZ := enc.lumaTokenBoundaryContexts(1, 1)
+	if want := [4]uint8{1, 0, 1, 0}; aboveNZ != want {
+		t.Fatalf("above luma contexts = %v, want %v", aboveNZ, want)
+	}
+	if want := [4]uint8{0, 1, 0, 1}; leftNZ != want {
+		t.Fatalf("left luma contexts = %v, want %v", leftNZ, want)
+	}
+
+	aboveModes, leftModes := enc.bModeBoundaryContexts(1, 1)
+	if want := [4]predict.BMode{predict.BTM, predict.BVE, predict.BHE, predict.BRD}; aboveModes != want {
+		t.Fatalf("above B-mode contexts = %v, want %v", aboveModes, want)
+	}
+	if want := [4]predict.BMode{predict.BHE, predict.BHE, predict.BHE, predict.BHE}; leftModes != want {
+		t.Fatalf("left B-mode contexts = %v, want %v", leftModes, want)
+	}
+}
+
+func TestY2ContextsPreserveIndependentBPredInputs(t *testing.T) {
+	enc := &encoder{mbw: 2, mbh: 2, mbs: make([]macroblock, 4)}
+	enc.mbs[2].y2Right = 1
+	enc.mbs[1].y2Below = 0
+
+	mb := &enc.mbs[3]
+	mb.useBPred = true
+	enc.updateY2Contexts(1, 1, mb)
+	if mb.y2Right != 1 || mb.y2Below != 0 {
+		t.Fatalf("B_PRED Y2 outputs = right %d below %d, want 1/0", mb.y2Right, mb.y2Below)
+	}
+
+	mb.useBPred = false
+	mb.nz[blockY2] = true
+	enc.updateY2Contexts(1, 1, mb)
+	if mb.y2Right != 1 || mb.y2Below != 1 {
+		t.Fatalf("whole-block Y2 outputs = right %d below %d, want 1/1", mb.y2Right, mb.y2Below)
+	}
+}
+
+func TestLumaCandidateRateSeparatesControlAndTokens(t *testing.T) {
+	enc := &encoder{mbw: 1, mbh: 1, mbs: make([]macroblock, 1)}
+	mb := &enc.mbs[0]
+	mb.yMode = predict.DC
+	mb.skip = true
+
+	whole := enc.lumaCandidateRateQ8(0, 0, mb, nil, false, 128, 0, 0)
+	if want := skipCostQ8(128, true) + lumaModeCostQ8(predict.DC); whole.control != want {
+		t.Fatalf("skipped whole control cost = %d, want %d", whole.control, want)
+	}
+	if whole.tokens != 0 {
+		t.Fatalf("skipped whole token cost = %d, want 0", whole.tokens)
+	}
+
+	var modes [16]predict.BMode
+	bPred := enc.lumaCandidateRateQ8(0, 0, mb, &modes, true, 128, 0, 0)
+	above, left := [4]predict.BMode{}, [4]predict.BMode{}
+	wantControl := skipCostQ8(128, true) + bPredLumaModeCostQ8(&modes, &above, &left)
+	if bPred.control != wantControl || bPred.tokens != 0 {
+		t.Fatalf("skipped B_PRED rate = %+v, want control %d and zero tokens", bPred, wantControl)
+	}
+
+	mb.skip = false
+	mb.levels[blockY2][0] = 1
+	mb.nz[blockY2] = true
+	whole = enc.lumaCandidateRateQ8(0, 0, mb, nil, false, 128, 0, 0)
+	if whole.tokens == 0 {
+		t.Fatal("non-skipped whole candidate has zero token cost")
+	}
+}
+
+func TestLumaRateTotalRejectsOverflow(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("lumaRateQ8.total accepted an overflow")
+		}
+	}()
+	lumaRateQ8{control: ^uint64(0), tokens: 1}.total()
+}
+
 func TestSkipCostEveryProbabilityAndValue(t *testing.T) {
 	for prob := 1; prob <= 255; prob++ {
 		for _, skip := range []bool{false, true} {

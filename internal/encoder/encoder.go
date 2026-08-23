@@ -45,15 +45,12 @@ const (
 )
 
 // Method 1 is the first effort tier that spends work on 4x4 luma search.
-// The constants below are intentionally conservative until the exact
-// fixed-point bit-cost and lambda model lands in the next WP-2 slice.
+// The remaining thresholds are bounded pre-search gates; final admission is
+// made by the exact fixed-point rate-distortion model.
 const (
-	bPredMinMethod                 = 1
-	bPredMinImprovementNumerator   = 1
-	bPredMinImprovementDenominator = 8
-	bPredPenaltyDivisor            = 4
-	bPredTrialPenaltyMultiplier    = 32
-	bPredMinCoefficientReduction   = 8
+	bPredMinMethod              = 1
+	bPredPenaltyDivisor         = 4
+	bPredTrialPenaltyMultiplier = 32
 )
 
 // macroblock holds everything the serializer needs about one macroblock.
@@ -73,6 +70,11 @@ type macroblock struct {
 	// nz marks the blocks that carry at least one coefficient. The token
 	// writer feeds these flags into the neighbour contexts.
 	nz [numBlocks]bool
+	// y2Right and y2Below are the independent Y2 token contexts this
+	// macroblock leaves for its right and lower neighbours. B_PRED has no Y2
+	// syntax, so it preserves each incoming value rather than clearing it.
+	y2Right uint8
+	y2Below uint8
 }
 
 // encoder holds one frame's state.
@@ -148,24 +150,30 @@ func (e *encoder) encodeMacroblock(mbx, mby int) {
 
 	if mb.useBPred {
 		e.chooseChromaMode(mbx, mby, mb)
+		e.codeChroma(mbx, mby, mb)
 		e.codeBPredLuma(mbx, mby, mb, &e.bPredModes[mbIndex], false)
 	} else {
 		wholePredictionSSE := e.chooseLumaMode(mbx, mby, mb)
 		e.chooseChromaMode(mbx, mby, mb)
+		e.codeChroma(mbx, mby, mb)
 		e.codeLuma(mbx, mby, mb)
+		mb.skip = macroblockSkipped(mb)
 		if e.cfg.Method >= bPredMinMethod && e.shouldTrialBPred(wholePredictionSSE) {
 			e.tryBPredLuma(mbx, mby, mbIndex, mb)
 		}
 	}
-	e.codeChroma(mbx, mby, mb)
 
-	mb.skip = true
+	mb.skip = macroblockSkipped(mb)
+	e.updateY2Contexts(mbx, mby, mb)
+}
+
+func macroblockSkipped(mb *macroblock) bool {
 	for i := 0; i < numBlocks; i++ {
 		if mb.nz[i] {
-			mb.skip = false
-			break
+			return false
 		}
 	}
+	return true
 }
 
 // setBPredModes records one complete B_PRED decision while preserving a nil
@@ -290,10 +298,16 @@ func (e *encoder) tryBPredLuma(mbx, mby, mbIndex int, mb *macroblock) {
 	candidate := wholeMB
 	var modes [16]predict.BMode
 	e.codeBPredLuma(mbx, mby, &candidate, &modes, true)
+	candidate.useBPred = true
+	candidate.skip = macroblockSkipped(&candidate)
 	bPredDistortion := e.lumaMacroblockSSE(mbx, mby)
-	wholeCoefficients := lumaCoefficientCount(&wholeMB)
-	bPredCoefficients := lumaCoefficientCount(&candidate)
-	if !admitBPred(wholeDistortion, bPredDistortion, penalty, wholeCoefficients, bPredCoefficients) {
+
+	leftY2, upY2 := e.y2Contexts(mbx, mby)
+	skipProb := e.skipProbability()
+	wholeRate := e.lumaCandidateRateQ8(mbx, mby, &wholeMB, nil, false, skipProb, leftY2, upY2)
+	bPredRate := e.lumaCandidateRateQ8(mbx, mby, &candidate, &modes, true, skipProb, leftY2, upY2)
+	if !bPredImprovesReconstruction(wholeDistortion, bPredDistortion, penalty) ||
+		!preferBPred(wholeDistortion, bPredDistortion, wholeRate, bPredRate, lumaLambda(e.q)) {
 		*mb = wholeMB
 		copyLuma16(e.rec.Y, e.rec.YStride, mbx*16, mby*16, wholeRecon[:], 16, 0, 0)
 		return
@@ -303,32 +317,6 @@ func (e *encoder) tryBPredLuma(mbx, mby, mbIndex int, mb *macroblock) {
 	e.setBPredModes(mbIndex, modes)
 }
 
-// admitBPred applies the provisional Method-1 admission policy. It requires
-// a quantizer-scaled absolute distortion win, a one-eighth relative win, and
-// enough retired coefficients to conservatively pay for sixteen submodes.
-// Slice 3's exact fixed-point bit cost and lambda replace this proxy.
-func admitBPred(wholeDistortion, bPredDistortion int32, penalty int64, wholeCoefficients, bPredCoefficients int) bool {
-	improvement := int64(wholeDistortion) - int64(bPredDistortion)
-	minRatioImprovement := int64(wholeDistortion) * bPredMinImprovementNumerator / bPredMinImprovementDenominator
-	return improvement > penalty &&
-		improvement > minRatioImprovement &&
-		bPredCoefficients+bPredMinCoefficientReduction <= wholeCoefficients
-}
-
-// lumaCoefficientCount counts the quantized Y2 and Y1 levels that are not
-// zero. It is a deliberately coarse rate proxy, not a claim about exact bits.
-func lumaCoefficientCount(mb *macroblock) int {
-	count := 0
-	for block := blockY2; block < blockLuma+16; block++ {
-		for _, level := range mb.levels[block] {
-			if level != 0 {
-				count++
-			}
-		}
-	}
-	return count
-}
-
 // shouldTrialBPred prunes smooth macroblocks before the ten-mode subblock
 // search. Prediction error is only a detail signal here; final admission uses
 // decoder-equivalent reconstructed distortion.
@@ -336,9 +324,8 @@ func (e *encoder) shouldTrialBPred(wholePredictionSSE int32) bool {
 	return int64(wholePredictionSSE) > e.bPredPenalty()*bPredTrialPenaltyMultiplier
 }
 
-// bPredPenalty is a deterministic quantizer-scaled proxy for the extra mode
-// and coefficient syntax of B_PRED. It is deliberately conservative. The
-// exact boolean/token cost and lambda replace this proxy in the next slice.
+// bPredPenalty supplies only the bounded smooth-block pretrial threshold.
+// Candidate admission itself uses exact boolean/token costs and lambda.
 func (e *encoder) bPredPenalty() int64 {
 	step := int64(e.q.Y1.AC)
 	penalty := step * step / bPredPenaltyDivisor
