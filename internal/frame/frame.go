@@ -24,9 +24,50 @@ const MaxDimension = 1<<14 - 1
 // ErrTooLarge reports a picture that does not fit the 14-bit size fields.
 var ErrTooLarge = errors.New("tqwebp: image is larger than 16383 pixels on a side")
 
-// Header holds every frame-level field WP-1 writes. Segmentation stays
-// off, the loop filter stays at the level given, and the frame keeps the
-// default coefficient probabilities.
+// SegmentFeature gates one per-segment quantizer or loop-filter delta.
+// When Enabled is true, Value carries a signed delta written as an
+// absolute magnitude followed by a sign flag.
+type SegmentFeature struct {
+	// Enabled signals that this segment overrides the base value.
+	Enabled bool
+	// Value is the signed delta applied to the segment.
+	Value int
+}
+
+// SegmentProbability gates one segment-map tree probability update.
+// When Update is true, Value is the new 8-bit probability.
+type SegmentProbability struct {
+	// Update signals that the decoder must read a new probability.
+	Update bool
+	// Value is the replacement probability, an 8-bit literal.
+	Value uint8
+}
+
+// Segmentation describes the optional per-segment feature map of RFC
+// 6386 section 9.3. The zero value keeps segmentation off.
+type Segmentation struct {
+	// Enabled turns segmentation on.
+	Enabled bool
+	// UpdateMap signals that the frame refreshes the three tree
+	// probabilities used to code the segment id.
+	UpdateMap bool
+	// UpdateData signals that the frame redefines the per-segment
+	// quantizer and loop-filter deltas.
+	UpdateData bool
+	// Absolute selects absolute magnitudes over signed deltas relative
+	// to the previous values. It only matters when UpdateData is on.
+	Absolute bool
+	// Quantizer holds one gate per segment for quantizer deltas.
+	Quantizer [4]SegmentFeature
+	// LoopFilter holds one gate per segment for loop-filter deltas.
+	LoopFilter [4]SegmentFeature
+	// TreeProbs holds the three segment-map tree probabilities.
+	TreeProbs [3]SegmentProbability
+}
+
+// Header holds every frame-level field WP-1 writes. The loop filter stays
+// at the level given, and the frame keeps the default coefficient
+// probabilities.
 type Header struct {
 	// Width and Height are the visible picture size in pixels.
 	Width, Height int
@@ -51,18 +92,28 @@ type Header struct {
 	// reads any tokens. A nil keeps the default table and writes one
 	// "no update" decision per entry, byte for byte as earlier releases.
 	TokenProbs *token.Probs
+	// Segmentation carries the optional per-segment feature data of
+	// section 9.3. The zero value keeps segmentation off, byte for byte
+	// as earlier releases.
+	Segmentation Segmentation
 }
 
 // WriteHeader writes the header fields of the first partition, in the
 // order RFC 6386 sections 9.2 to 9.11 fix. The caller then writes the
-// per-macroblock prediction records into the same encoder.
+// per-macroblock prediction records into the same encoder. It panics on
+// a Segmentation whose enabled feature values do not fit their fields.
 func WriteHeader(enc *boolenc.Encoder, h Header) {
+	validateSegmentation(h.Segmentation)
+
 	// Section 9.2: colour space and clamping type. Both stay at 0.
 	enc.WriteFlag(false)
 	enc.WriteFlag(false)
 
-	// Section 9.3: segmentation stays off.
-	enc.WriteFlag(false)
+	// Section 9.3: segmentation.
+	enc.WriteFlag(h.Segmentation.Enabled)
+	if h.Segmentation.Enabled {
+		writeSegmentation(enc, h.Segmentation)
+	}
 
 	// Section 9.4: loop filter.
 	enc.WriteFlag(h.FilterSimple)
@@ -91,6 +142,68 @@ func WriteHeader(enc *boolenc.Encoder, h Header) {
 	// Section 9.10: the skip flag is in use, with its probability.
 	enc.WriteFlag(true)
 	enc.WriteLiteral(uint32(h.SkipProb), 8)
+}
+
+// validateSegmentation panics when an enabled feature value would be
+// silently truncated by the fixed-width fields of section 9.3: quantizer
+// deltas carry 7 magnitude bits, loop-filter deltas 6.
+func validateSegmentation(s Segmentation) {
+	for i, f := range s.Quantizer {
+		if !f.Enabled {
+			continue
+		}
+		if f.Value < -127 || f.Value > 127 {
+			panic(fmt.Sprintf("tqwebp/frame: segmentation quantizer delta for segment %d is %d, out of range -127..127", i, f.Value))
+		}
+	}
+	for i, f := range s.LoopFilter {
+		if !f.Enabled {
+			continue
+		}
+		if f.Value < -63 || f.Value > 63 {
+			panic(fmt.Sprintf("tqwebp/frame: segmentation loop-filter delta for segment %d is %d, out of range -63..63", i, f.Value))
+		}
+	}
+}
+
+// writeSegmentFeature writes one per-segment feature gate and, when the
+// gate is on, the signed value as an absolute magnitude of n bits
+// followed by a sign flag (RFC 6386 section 9.3).
+func writeSegmentFeature(enc *boolenc.Encoder, f SegmentFeature, n int) {
+	enc.WriteFlag(f.Enabled)
+	if f.Enabled {
+		v := f.Value
+		negative := v < 0
+		if negative {
+			v = -v
+		}
+		enc.WriteLiteral(uint32(v), n)
+		enc.WriteFlag(negative)
+	}
+}
+
+// writeSegmentation writes the body of section 9.3 after the enabled
+// flag: feature data first, then the segment-map tree probabilities.
+func writeSegmentation(enc *boolenc.Encoder, s Segmentation) {
+	enc.WriteFlag(s.UpdateMap)
+	enc.WriteFlag(s.UpdateData)
+	if s.UpdateData {
+		enc.WriteFlag(s.Absolute)
+		for _, f := range s.Quantizer {
+			writeSegmentFeature(enc, f, 7)
+		}
+		for _, f := range s.LoopFilter {
+			writeSegmentFeature(enc, f, 6)
+		}
+	}
+	if s.UpdateMap {
+		for _, p := range s.TreeProbs {
+			enc.WriteFlag(p.Update)
+			if p.Update {
+				enc.WriteLiteral(uint32(p.Value), 8)
+			}
+		}
+	}
 }
 
 // Assemble returns a complete VP8 key frame: the uncompressed 10-byte
