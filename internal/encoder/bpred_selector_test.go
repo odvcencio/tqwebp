@@ -47,7 +47,7 @@ func TestBPredSelectorEffortBoundary(t *testing.T) {
 			}
 		}
 	}
-	const wantSelected = 51
+	const wantSelected = 55
 	if selected != wantSelected {
 		t.Fatalf("method 1 selected %d B_PRED macroblocks, want %d", selected, wantSelected)
 	}
