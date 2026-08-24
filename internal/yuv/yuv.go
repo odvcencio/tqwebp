@@ -151,19 +151,14 @@ func Convert(m image.Image) *Planes {
 	p := NewPlanes(b.Dx(), b.Dy())
 	src := newSampler(m)
 
-	// Luma covers every padded position. Padded positions repeat the
-	// nearest edge pixel, which the sampler does through its clamp.
-	for y := 0; y < p.MBH*16; y++ {
-		row := p.Y[y*p.YStride:]
-		for x := 0; x < p.YStride; x++ {
-			r, g, bb := src.at(x, y)
-			row[x] = RGBToY(r, g, bb)
-		}
-	}
-
-	// Chroma averages each 2x2 box in the red, green, and blue domain,
-	// then converts the sum once.
+	// One pass over the padded picture as 2x2 boxes. Each box samples
+	// its four padded coordinates once, writes their four luma values,
+	// accumulates the same RGB triples, and converts the sum once into
+	// the chroma sample. Padded positions repeat the nearest edge pixel,
+	// which the sampler does through its clamp.
 	for cy := 0; cy < p.MBH*8; cy++ {
+		yrow := p.Y[2*cy*p.YStride:]
+		yrow2 := p.Y[(2*cy+1)*p.YStride:]
 		for cx := 0; cx < p.CStride; cx++ {
 			var sr, sg, sb int32
 			for dy := 0; dy < 2; dy++ {
@@ -172,6 +167,11 @@ func Convert(m image.Image) *Planes {
 					sr += int32(r)
 					sg += int32(g)
 					sb += int32(bb)
+					if dy == 0 {
+						yrow[2*cx+dx] = RGBToY(r, g, bb)
+					} else {
+						yrow2[2*cx+dx] = RGBToY(r, g, bb)
+					}
 				}
 			}
 			i := cy*p.CStride + cx
