@@ -1,0 +1,139 @@
+--- a/internal/container/container.go
++++ b/internal/container/container.go
+@@
+ import (
+ 	"encoding/binary"
+ 	"fmt"
++	"io"
+ )
+ 
+ // WriteSimpleLossy writes payload, a VP8 key frame, to w inside a RIFF
+ // WebP container.
+ func WriteSimpleLossy(w io.Writer, payload []byte) error {
+@@
+-	if _, err := w.Write(header[:]); err != nil {
++	if n, err := w.Write(header[:]); err != nil {
+ 		return err
++	} else if n != len(header) {
++		return io.ErrShortWrite
+ 	}
+-	if _, err := w.Write(payload); err != nil {
++	if n, err := w.Write(payload); err != nil {
+ 		return err
++	} else if n != len(payload) {
++		return io.ErrShortWrite
+ 	}
+ 	if pad == 1 {
+-		if _, err := w.Write([]byte{0}); err != nil {
++		if _, err := w.Write(padByte[:]); err != nil {
+ 			return err
+ 		}
+ 	}
+ 	return nil
+ }
+--- a/internal/container/container_test.go
++++ b/internal/container/container_test.go
+@@ -0,0 +1,120 @@
++package container
++
++import (
++	"bytes"
++	"errors"
++	"io"
++	"testing"
++)
++
++var errTest = errors.New("test writer error")
++
++// shortWriter accepts all writes before the failCall-th call (1-based),
++// then either returns len(p)-1 with nil error or errTest.
++type shortWriter struct {
++	failCall int
++	short    bool
++	calls    int
++	buf      bytes.Buffer
++}
++
++func (s *shortWriter) Write(p []byte) (int, error) {
++	s.calls++
++	if s.calls == s.failCall {
++		if s.short {
++			return len(p) - 1, nil
++		}
++		return 0, errTest
++	}
++	s.buf.Write(p)
++	return len(p), nil
++}
++
++func TestShortHeaderWrite(t *testing.T) {
++	w := &shortWriter{failCall: 1, short: true}
++	err := WriteSimpleLossy(w, []byte{0x9d, 0x01, 0x2a})
++	if !errors.Is(err, io.ErrShortWrite) {
++		t.Fatalf("error = %v, want io.ErrShortWrite", err)
++	}
++	if w.calls != 1 {
++		t.Fatalf("calls = %d, want 1", w.calls)
++	}
++}
++
++func TestShortPayloadWrite(t *testing.T) {
++	w := &shortWriter{failCall: 2, short: true}
++	err := WriteSimpleLossy(w, []byte{0x9d, 0x01, 0x2a})
++	if !errors.Is(err, io.ErrShortWrite) {
++		t.Fatalf("error = %v, want io.ErrShortWrite", err)
++	}
++	if w.calls != 2 {
++		t.Fatalf("calls = %d, want 2", w.calls)
++	}
++}
++
++func TestShortPadWrite(t *testing.T) {
++	w := &shortWriter{failCall: 3, short: true}
++	err := WriteSimpleLossy(w, []byte{0x01, 0x02, 0x03})
++	if !errors.Is(err, io.ErrShortWrite) {
++		t.Fatalf("error = %v, want io.ErrShortWrite", err)
++	}
++	if w.calls != 3 {
++		t.Fatalf("calls = %d, want 3", w.calls)
++	}
++}
++
++func TestUnderlyingErrorPropagated(t *testing.T) {
++	for _, fc := range []int{1, 2, 3} {
++		w := &shortWriter{failCall: fc}
++		err := WriteSimpleLossy(w, []byte{0x01, 0x02, 0x03})
++		if !errors.Is(err, errTest) {
++			t.Fatalf("failCall=%d: error = %v, want errTest", fc, err)
++		}
++	}
++}
++
++func TestExactLayout(t *testing.T) {
++	wantOdd := []byte{
++		0x52, 0x49, 0x46, 0x46, 0x10, 0x00, 0x00, 0x00,
++		0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20,
++		0x03, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x00,
++	}
++	var odd bytes.Buffer
++	if err := WriteSimpleLossy(&odd, []byte{0x01, 0x02, 0x03}); err != nil {
++		t.Fatalf("odd: %v", err)
++	}
++	if !bytes.Equal(odd.Bytes(), wantOdd) {
++		t.Fatalf("odd output = % x, want % x", odd.Bytes(), wantOdd)
++	}
++	if got := Size(3); got != odd.Len() {
++		t.Fatalf("Size(3) = %d, want %d", got, odd.Len())
++	}
++
++	var even bytes.Buffer
++	if err := WriteSimpleLossy(&even, []byte{0x01, 0x02}); err != nil {
++		t.Fatalf("even: %v", err)
++	}
++	if even.Len() != 22 || even.Bytes()[4] != 14 {
++		t.Fatalf("even output = % x", even.Bytes())
++	}
++	if got := Size(2); got != even.Len() {
++		t.Fatalf("Size(2) = %d, want %d", got, even.Len())
++	}
++}
