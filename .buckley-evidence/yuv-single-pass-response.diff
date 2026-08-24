@@ -1,0 +1,103 @@
+diff --git a/internal/yuv/yuv.go b/internal/yuv/yuv.go
+index 0000000..0000001 100644
+--- a/internal/yuv/yuv.go
++++ b/internal/yuv/yuv.go
+@@ -1,5 +1,4 @@
+-// Convert reads m and returns its padded 4:2:0 planes. It ignores any
+-// alpha channel; callers reject non-opaque images before they call it
+-// (see IsOpaque).
++// Convert reads m and returns its padded 4:2:0 planes. It ignores any
++// alpha channel; callers reject non-opaque images before they call it
++// (see IsOpaque).
+ func Convert(m image.Image) *Planes {
+ 	b := m.Bounds()
+ 	p := NewPlanes(b.Dx(), b.Dy())
+ 	src := newSampler(m)
+ 
+-	// Luma covers every padded position. Padded positions repeat the
+-	// nearest edge pixel, which the sampler does through its clamp.
+-	for y := 0; y < p.MBH*16; y++ {
+-		row := p.Y[y*p.YStride:]
+-		for x := 0; x < p.YStride; x++ {
+-			r, g, bb := src.at(x, y)
+-			row[x] = RGBToY(r, g, bb)
+-		}
+-	}
+-
+-	// Chroma averages each 2x2 box in the red, green, and blue domain,
+-	// then converts the sum once.
++	// One pass over the padded picture as 2x2 boxes. Each box samples
++	// its four padded coordinates once, writes their four luma values,
++	// accumulates the same RGB triples, and converts the sum once into
++	// the chroma sample. Padded positions repeat the nearest edge pixel,
++	// which the sampler does through its clamp.
+ 	for cy := 0; cy < p.MBH*8; cy++ {
++		yrow := p.Y[2*cy*p.YStride:]
++		yrow2 := p.Y[(2*cy+1)*p.YStride:]
+ 		for cx := 0; cx < p.CStride; cx++ {
+ 			var sr, sg, sb int32
+ 			for dy := 0; dy < 2; dy++ {
+ 				for dx := 0; dx < 2; dx++ {
+ 					r, g, bb := src.at(2*cx+dx, 2*cy+dy)
+ 					sr += int32(r)
+ 					sg += int32(g)
+ 					sb += int32(bb)
++					if dy == 0 {
++						yrow[2*cx+dx] = RGBToY(r, g, bb)
++					} else {
++						yrow2[2*cx+dx] = RGBToY(r, g, bb)
++					}
+ 				}
+ 			}
+ 			i := cy*p.CStride + cx
+ 			p.U[i] = boxToU(sr, sg, sb)
+ 			p.V[i] = boxToV(sr, sg, sb)
+ 		}
+ 	}
+ 	return p
+ }
+diff --git a/internal/yuv/convert_single_pass_test.go b/internal/yuv/convert_single_pass_test.go
+new file mode 100644
+index 0000000..0000002
+--- /dev/null
++++ b/internal/yuv/convert_single_pass_test.go
+@@ -0,0 +1,60 @@
++package yuv
++
++import (
++	"image"
++	"image/color"
++	"testing"
++)
++
++type countingImage struct {
++	image.Image
++	calls int
++}
++
++func (m *countingImage) At(x, y int) color.Color {
++	m.calls++
++	return m.Image.At(x, y)
++}
++
++func TestConvertSamplesEachPaddedPixelOnce(t *testing.T) {
++	src := image.NewRGBA(image.Rect(3, 5, 20, 24))
++	m := &countingImage{Image: src}
++	p := Convert(m)
++	want := p.YStride * p.MBH * 16
++	if m.calls != want {
++		t.Fatalf("source samples = %d, want %d (one per padded luma position)", m.calls, want)
++	}
++}
++
++func BenchmarkProbeConvertRGBA512(b *testing.B) {
++	src := image.NewRGBA(image.Rect(0, 0, 512, 512))
++	for i := range src.Pix {
++		src.Pix[i] = uint8(i * 7)
++	}
++	b.ReportAllocs()
++	b.ResetTimer()
++	for i := 0; i < b.N; i++ {
++		_ = Convert(src)
++	}
++}
