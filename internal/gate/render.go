@@ -11,6 +11,7 @@ import (
 // render identically.
 func (rep *Report) String() string {
 	var b strings.Builder
+	fmt.Fprintf(&b, "tqwebp encoder method: %d\n\n", rep.Method)
 
 	fmt.Fprintf(&b, "%-22s %-10s %7s %9s %10s %10s %8s %10s\n",
 		"image", "class", "quality", "bytes", "coded_y_db", "shown_y_db", "ssim", "ms_per_mp")

@@ -14,7 +14,7 @@
 //
 //	go run ./cmd/tqbench [-root DIR] [-out FILE] [-update]
 //	go run ./cmd/tqbench -gates [-root DIR] [-json FILE] [-encoded-dir DIR]
-//	                     [-qualities 50,75,85,90,95]
+//	                     [-method 4] [-qualities 50,75,85,90,95]
 package main
 
 import (
@@ -38,6 +38,7 @@ func main() {
 	gates := flag.Bool("gates", false, "run the release gates instead of the baseline table")
 	jsonOut := flag.String("json", "", "write the gate report as JSON to this path")
 	encodedDir := flag.String("encoded-dir", "", "write every encoded file into this directory, for external checks")
+	method := flag.Int("method", gate.DefaultMethod, "encoder effort method for the gate run, from 1 through 6")
 	qualities := flag.String("qualities", "10,25,50,75,85,90,95", "comma separated quality settings for the gate run")
 	strict := flag.Bool("strict", false, "also fail the run when gate G2b fails (see the README for why its byte-ratio clause is reported, not gated, on the generated corpus)")
 	flag.Parse()
@@ -48,7 +49,7 @@ func main() {
 	}
 
 	if *gates {
-		runGates(*root, images, *qualities, *jsonOut, *encodedDir, *strict)
+		runGates(*root, images, *method, *qualities, *jsonOut, *encodedDir, *strict)
 		return
 	}
 
@@ -67,9 +68,10 @@ func main() {
 	fmt.Print(table.String())
 }
 
-func runGates(root string, images []corpus.Image, qualities, jsonPath, encodedDir string, strict bool) {
+func runGates(root string, images []corpus.Image, method int, qualities, jsonPath, encodedDir string, strict bool) {
 	opts := gate.Options{
 		Qualities:      parseQualities(qualities),
+		Method:         method,
 		JPEGQuality:    82,
 		DeepteamsTable: readOptional(filepath.Join(root, "bench", "deepteams", "testdata", "golden", "deepteams_baseline.txt")),
 	}

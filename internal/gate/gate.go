@@ -75,6 +75,7 @@ type Point struct {
 // Report holds every measurement and every gate verdict of one run.
 type Report struct {
 	Qualities []int   `json:"qualities"`
+	Method    int     `json:"method"`
 	Points    []Point `json:"points"`
 
 	G1  G1Result  `json:"g1"`
@@ -196,6 +197,9 @@ type G4bCompared struct {
 type Options struct {
 	// Qualities are the tqwebp quality settings to measure.
 	Qualities []int
+	// Method is the encoder effort setting to measure. Zero selects
+	// DefaultMethod, matching the public zero-value option semantics.
+	Method int
 	// JPEGQuality is the stdlib JPEG setting gate G2 compares against.
 	JPEGQuality int
 	// DeepteamsTable is the committed deepteams/webp fixture, in the text
@@ -221,6 +225,10 @@ type LibwebpPoint struct {
 // DefaultQualities is the quality sweep the gates use.
 var DefaultQualities = []int{10, 25, 50, 75, 85, 90, 95}
 
+// DefaultMethod is the effort level measured when Options.Method is zero.
+// Keep it aligned with the public package default.
+const DefaultMethod = 4
+
 // Run measures every image at every quality and evaluates the gates.
 func Run(images []corpus.Image, opts Options) (*Report, error) {
 	if len(opts.Qualities) == 0 {
@@ -229,13 +237,19 @@ func Run(images []corpus.Image, opts Options) (*Report, error) {
 	if opts.JPEGQuality == 0 {
 		opts.JPEGQuality = 82
 	}
+	if opts.Method == 0 {
+		opts.Method = DefaultMethod
+	}
+	if opts.Method < 1 || opts.Method > 6 {
+		return nil, fmt.Errorf("tqwebp gate: method %d is outside 1 to 6", opts.Method)
+	}
 
-	rep := &Report{Qualities: opts.Qualities}
+	rep := &Report{Qualities: opts.Qualities, Method: opts.Method}
 	rep.G1.Images = len(images)
 
 	for _, img := range images {
 		for _, q := range opts.Qualities {
-			pt, data, err := measure(img, q)
+			pt, data, err := measure(img, q, opts.Method)
 			if err != nil {
 				rep.G1.DecodeErrors = append(rep.G1.DecodeErrors, fmt.Sprintf("%s q%d: %v", img.Spec.Name, q, err))
 				continue
@@ -271,9 +285,9 @@ func Run(images []corpus.Image, opts Options) (*Report, error) {
 }
 
 // measure encodes one image at one quality and scores the result.
-func measure(img corpus.Image, quality int) (Point, []byte, error) {
+func measure(img corpus.Image, quality, method int) (Point, []byte, error) {
 	start := time.Now()
-	data, recon, err := encoder.EncodeWithReconstruction(img.Img, encoder.Config{Quality: quality, Method: 4})
+	data, recon, err := encoder.EncodeWithReconstruction(img.Img, encoder.Config{Quality: quality, Method: method})
 	if err != nil {
 		return Point{}, nil, fmt.Errorf("encode: %w", err)
 	}

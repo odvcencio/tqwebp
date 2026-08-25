@@ -123,6 +123,9 @@ func TestRunSmall(t *testing.T) {
 	if len(rep.Points) != 4 {
 		t.Fatalf("measured %d points, want 4", len(rep.Points))
 	}
+	if rep.Method != DefaultMethod {
+		t.Fatalf("report method = %d, want default %d", rep.Method, DefaultMethod)
+	}
 	if !rep.G1.Pass {
 		t.Errorf("gate G1 failed: %v %v", rep.G1.DecodeErrors, rep.G1.MismatchNotes)
 	}
@@ -136,5 +139,22 @@ func TestRunSmall(t *testing.T) {
 	}
 	if rep.String() == "" {
 		t.Error("the report rendered as an empty string")
+	}
+}
+
+func TestRunMethodBoundary(t *testing.T) {
+	for _, method := range []int{1, 6} {
+		rep, err := Run(nil, Options{Method: method})
+		if err != nil {
+			t.Fatalf("method %d: %v", method, err)
+		}
+		if rep.Method != method {
+			t.Fatalf("method %d: report method = %d", method, rep.Method)
+		}
+	}
+	for _, method := range []int{-1, 7} {
+		if _, err := Run(nil, Options{Method: method}); err == nil {
+			t.Fatalf("method %d was accepted", method)
+		}
 	}
 }
