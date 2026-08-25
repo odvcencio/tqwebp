@@ -6,6 +6,14 @@ All notable changes to tqwebp are documented in this file.
 
 ### Added
 
+- `Limits` and `EncodeWithLimits` at the module root. Applications that
+  process untrusted images can cap width, height, visible pixels, and the
+  complete RIFF output. Zero means no caller-specified cap; negative limits
+  return `ErrInvalidLimits`. Dimension and pixel caps are checked before
+  pixel access or plane allocation, and an output cap is checked before any
+  caller-visible write (`ErrOutputTooLarge` / `ErrLimitExceeded`). The
+  existing `Encode` entry point and its output remain unchanged.
+
 - `internal/cost`: the exact rate primitives the coming
   reconstructed-neighbour search will consume. Q8 fixed-point boolean
   decision costs cover every codable probability in both branches; on

@@ -30,6 +30,17 @@
 // ErrAlphaUnsupported for an image with a translucent pixel, so no
 // pipeline can lose a mask without noticing.
 //
+// # Resource limits
+//
+// EncodeWithLimits adds optional bounds for width, height, visible pixel
+// count, and complete output size. Every Limits field uses zero for no
+// caller-specified limit; negative fields return ErrInvalidLimits. Bounds
+// and the visible pixel count are checked before Opaque or At is called and
+// before padded planes are allocated. The complete file is serialized in a
+// private buffer before MaxOutputBytes is checked, so a refusal for that
+// limit never writes a partial file. Encode remains the backwards-compatible
+// unconstrained entry point.
+//
 // # Effort levels
 //
 // Method runs from 0 to 6. Methods 0 to 4 implement one effort level:
@@ -45,6 +56,7 @@
 package webp
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"image"
@@ -79,6 +91,21 @@ type Options struct {
 	Method int
 }
 
+// Limits bounds the work and output of EncodeWithLimits. A zero field means
+// that field has no caller-specified limit. Negative fields are invalid and
+// return ErrInvalidLimits. The encoder's built-in VP8 dimension limit still
+// applies when MaxWidth and MaxHeight are zero.
+//
+// MaxPixels counts the visible pixels in m.Bounds(), before any padded
+// macroblocks are allocated. MaxOutputBytes counts the complete WebP file,
+// including its RIFF and VP8 headers and any pad byte.
+type Limits struct {
+	MaxWidth       int
+	MaxHeight      int
+	MaxPixels      int64
+	MaxOutputBytes int64
+}
+
 // Sentinel errors Encode returns. Callers can test them with errors.Is.
 var (
 	// ErrAlphaUnsupported reports an image with at least one translucent
@@ -88,6 +115,19 @@ var (
 
 	// ErrInvalidOptions reports an option value outside its range.
 	ErrInvalidOptions = errors.New("tqwebp: invalid options")
+
+	// ErrInvalidLimits reports a negative resource limit. Zero means
+	// unlimited for every field in Limits.
+	ErrInvalidLimits = errors.New("tqwebp: invalid limits")
+
+	// ErrLimitExceeded reports an image or output that exceeds a caller's
+	// configured resource limit.
+	ErrLimitExceeded = errors.New("tqwebp: resource limit exceeded")
+
+	// ErrOutputTooLarge reports an encoded file larger than MaxOutputBytes.
+	// It also wraps ErrLimitExceeded, so callers can handle all limit
+	// refusals through either sentinel.
+	ErrOutputTooLarge = errors.New("tqwebp: output exceeds limit")
 
 	// ErrTooLarge reports an image wider or taller than 16383 pixels,
 	// which the VP8 picture size fields cannot carry.
@@ -117,6 +157,79 @@ func Encode(w io.Writer, m image.Image, o *Options) error {
 		return ErrAlphaUnsupported
 	}
 	return encoder.Encode(w, m, cfg)
+}
+
+// EncodeWithLimits writes m in the lossy WebP format subject to limits. A
+// nil o means the default options. A zero Limits value imposes no additional
+// limit, so the encoded bytes match Encode for the same image and options.
+//
+// Bounds and the visible pixel count are checked before the encoder calls
+// Opaque or At and before it allocates padded image planes. The complete
+// WebP file is serialized into a private buffer before MaxOutputBytes is
+// checked, so an output-cap refusal never writes a partial file to w.
+func EncodeWithLimits(w io.Writer, m image.Image, o *Options, limits Limits) error {
+	cfg, err := configFor(o)
+	if err != nil {
+		return err
+	}
+	if err := validateLimits(limits); err != nil {
+		return err
+	}
+
+	b := m.Bounds()
+	width, height := b.Dx(), b.Dy()
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("tqwebp: image is %dx%d pixels", width, height)
+	}
+	if limits.MaxWidth > 0 && width > limits.MaxWidth {
+		return fmt.Errorf("%w: width %d exceeds MaxWidth %d", ErrLimitExceeded, width, limits.MaxWidth)
+	}
+	if limits.MaxHeight > 0 && height > limits.MaxHeight {
+		return fmt.Errorf("%w: height %d exceeds MaxHeight %d", ErrLimitExceeded, height, limits.MaxHeight)
+	}
+	if limits.MaxPixels > 0 && uint64(width) > uint64(limits.MaxPixels)/uint64(height) {
+		return fmt.Errorf("%w: image has more than MaxPixels %d pixels", ErrLimitExceeded, limits.MaxPixels)
+	}
+	if width > frame.MaxDimension || height > frame.MaxDimension {
+		return ErrTooLarge
+	}
+
+	if !yuv.IsOpaque(m) {
+		return ErrAlphaUnsupported
+	}
+
+	var encoded bytes.Buffer
+	if err := encoder.Encode(&encoded, m, cfg); err != nil {
+		return err
+	}
+	if limits.MaxOutputBytes > 0 && int64(encoded.Len()) > limits.MaxOutputBytes {
+		return fmt.Errorf("%w: %d bytes exceeds MaxOutputBytes %d: %w", ErrOutputTooLarge, encoded.Len(), limits.MaxOutputBytes, ErrLimitExceeded)
+	}
+	data := encoded.Bytes()
+	n, err := w.Write(data)
+	if err != nil {
+		return err
+	}
+	if n != len(data) {
+		return io.ErrShortWrite
+	}
+	return nil
+}
+
+func validateLimits(limits Limits) error {
+	if limits.MaxWidth < 0 {
+		return fmt.Errorf("%w: MaxWidth must be non-negative", ErrInvalidLimits)
+	}
+	if limits.MaxHeight < 0 {
+		return fmt.Errorf("%w: MaxHeight must be non-negative", ErrInvalidLimits)
+	}
+	if limits.MaxPixels < 0 {
+		return fmt.Errorf("%w: MaxPixels must be non-negative", ErrInvalidLimits)
+	}
+	if limits.MaxOutputBytes < 0 {
+		return fmt.Errorf("%w: MaxOutputBytes must be non-negative", ErrInvalidLimits)
+	}
+	return nil
 }
 
 // configFor validates o and fills its defaults in.

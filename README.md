@@ -51,6 +51,27 @@ both mean quality 75 and method 4. Quality 75 lands within 0.02 dB of
 libwebp's quality 75 on the photo corpus, so the knob means what a caller
 who knows `cwebp` expects it to mean.
 
+For untrusted image sizes or output budgets, `EncodeWithLimits` adds an
+explicit resource boundary without changing the default `Encode` behavior:
+
+```go
+err := webp.EncodeWithLimits(w, img, nil, webp.Limits{
+	MaxWidth:       4096,
+	MaxHeight:      4096,
+	MaxPixels:      16 << 20,
+	MaxOutputBytes: 8 << 20,
+})
+```
+
+Every limit is optional: zero means unlimited, while a negative value is
+invalid and returns `ErrInvalidLimits`. Width and height apply to the
+visible `image.Bounds`; `MaxPixels` applies to their product before padded
+macroblocks are allocated. The built-in VP8 dimension limit still applies
+when the corresponding dimension limit is zero. `MaxOutputBytes` includes
+the complete RIFF file. The file is serialized before that cap is checked,
+so an output-cap refusal returns `ErrOutputTooLarge` (and
+`ErrLimitExceeded` via `errors.Is`) without writing a partial file.
+
 The `Method` knob now carries one implemented distinction. Methods 0 to 4
 share a single effort level: every macroblock's luma uses one of the four
 whole-block prediction modes. Methods 5 and 6 add a conservative
