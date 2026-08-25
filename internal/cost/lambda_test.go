@@ -1,149 +1,95 @@
 package cost
 
 import (
-	"math"
 	"testing"
 
 	"m31labs.dev/tqwebp/internal/quantize"
 )
 
-// TestLambdaFollowsTheFormulaAcrossAllIndexes recomputes the slope
-// definition -- round(85/100 * s^2) with s the luma alternating-current
-// factor -- for every quantizer index straight from the normative factor
-// table, and requires exact agreement.
-func TestLambdaFollowsTheFormulaAcrossAllIndexes(t *testing.T) {
+func TestLambdasFollowReferenceFormulaAcrossAllIndexes(t *testing.T) {
 	for idx := 0; idx <= 127; idx++ {
 		q := quantize.New(quantize.Index(idx))
-		s := int64(q.Y1.AC)
-		want := (85*s*s + 50) / 100
-		if got := Lambda(q); got != want {
-			t.Fatalf("Lambda(index %d) = %d, want %d", idx, got, want)
+		s := (int64(q.Y1.DC) + 15*int64(q.Y1.AC) + 8) >> 4
+		wantMode := s * s >> 7
+		wantTrellis := 7 * s * s >> 3
+		if wantMode < 1 {
+			wantMode = 1
 		}
-		if q.Y1.AC <= 0 {
-			t.Fatalf("index %d has a nonpositive luma step", idx)
+		if wantTrellis < 1 {
+			wantTrellis = 1
 		}
-	}
-}
-
-// TestLambdaForQualityGoldenBoundaries pins representative points of the
-// public knob: both clamped ends, the calibrated default, and steps in
-// between.
-func TestLambdaForQualityGoldenBoundaries(t *testing.T) {
-	golden := map[int]int64{
-		0:   68558, // coarsest step, quality clamps at 0
-		5:   15954,
-		10:  5715,
-		20:  2211,
-		30:  1646,
-		40:  1164,
-		50:  817,
-		60:  715,
-		70:  620,
-		75:  575, // the default-quality neighbourhood
-		80:  411,
-		85:  246,
-		90:  103,
-		95:  42,
-		99:  21,
-		100: 14, // finest step, quality clamps at 100
-	}
-	for quality, want := range golden {
-		if got := LambdaForQuality(quality); got != want {
-			t.Errorf("LambdaForQuality(%d) = %d, want pinned %d", quality, got, want)
+		if got := ModeLambda(q); got != wantMode {
+			t.Fatalf("ModeLambda(index %d) = %d, want %d", idx, got, wantMode)
+		}
+		if got := TrellisLambda(q); got != wantTrellis {
+			t.Fatalf("TrellisLambda(index %d) = %d, want %d", idx, got, wantTrellis)
 		}
 	}
 }
 
-// TestLambdaIsMonotone pins the ordering the search relies on: coarser
-// quantization never lowers lambda, and higher quality never raises it.
-func TestLambdaIsMonotone(t *testing.T) {
-	prev := int64(-1)
-	for idx := 0; idx <= 127; idx++ {
-		got := Lambda(quantize.New(quantize.Index(idx)))
-		if got < prev {
-			t.Fatalf("lambda decreased from index %d to %d: %d then %d", idx-1, idx, prev, got)
-		}
-		prev = got
-	}
-
-	prev = -1
-	lo, hi := int64(math.MaxInt64), int64(0)
-	for quality := 0; quality <= 100; quality++ {
-		got := LambdaForQuality(quality)
-		if prev >= 0 && got > prev {
-			t.Fatalf("lambda rose from quality %d to %d: %d then %d", quality-1, quality, prev, got)
-		}
-		prev = got
-		if got < lo {
-			lo = got
-		}
-		if got > hi {
-			hi = got
-		}
-	}
-	// The knob must actually span the trade-off: coarsest over finest at
-	// least three orders of magnitude. This survives anchor
-	// recalibration, unlike counting distinct values.
-	if hi < 1000*lo {
-		t.Errorf("slope spread too narrow: coarsest %d, finest %d", hi, lo)
-	}
-}
-
-// TestLambdaClampsWithThePublicKnob keeps out-of-range qualities on the
-// same slope as the boundary they clamp to.
-func TestLambdaClampsWithThePublicKnob(t *testing.T) {
-	if got, want := LambdaForQuality(-3), LambdaForQuality(0); got != want {
-		t.Errorf("quality -3 gave %d, want the quality-0 slope %d", got, want)
-	}
-	if got, want := LambdaForQuality(107), LambdaForQuality(100); got != want {
-		t.Errorf("quality 107 gave %d, want the quality-100 slope %d", got, want)
-	}
-}
-
-// TestLambdaNearestIntegerRounding pins the rounding rule accurately.
-// The slope is the rational 85*s^2/100, rounded to the nearest integer
-// by the integer idiom (85*s^2 + 50) / 100: add half the denominator,
-// then truncate. An exact tie -- a fraction of exactly one half --
-// would require 85*s^2 == 50 (mod 100), which reduces to
-// s^2 == 10 (mod 20). Squares modulo 20 are only 0, 1, 4, 5, 9, or 16,
-// so no integer s satisfies it. Ties are therefore
-// impossible and the idiom is plain nearest-integer rounding, not a
-// half-rounding rule; the sweep below proves the same over every step
-// the normative factor table can produce, whose fractions are
-// multiples of 1/100 and never 1/2.
-//
-// The real factor table supplies steps on both sides of the boundary.
-// The closest achievable fractions to one half are 40/100 and 60/100:
-// index 18 carries step 22, so the slope is 411.40 and must round
-// down; index 22 carries step 26, so the slope is 574.60 and must
-// round up. Index 16 carries step 20, whose slope is exactly 340 -- an
-// integral value that needs no rounding at all.
-func TestLambdaNearestIntegerRounding(t *testing.T) {
-	cases := []struct {
-		index quantize.Index
-		step  int64
-		slope int64
+func TestLambdaGoldenQualityBoundaries(t *testing.T) {
+	tests := []struct {
+		quality       int
+		mode, trellis int64
 	}{
-		{16, 20, 340}, // 340.00: integral, no rounding
-		{18, 22, 411}, // 411.40: below the half boundary, rounds down
-		{22, 26, 575}, // 574.60: above the half boundary, rounds up
+		{0, 595, 66654},
+		{5, 140, 15711},
+		{10, 51, 5740},
+		{20, 20, 2275},
+		{30, 15, 1694},
+		{40, 10, 1197},
+		{50, 7, 840},
+		{60, 6, 735},
+		{70, 5, 637},
+		{75, 5, 591},
+		{80, 3, 423},
+		{85, 2, 252},
+		{90, 1, 105},
+		{95, 1, 42},
+		{99, 1, 21},
+		{100, 1, 14},
 	}
-	for _, c := range cases {
-		q := quantize.New(c.index)
-		if s := int64(q.Y1.AC); s != c.step {
-			t.Fatalf("index %d carries luma step %d, test assumes %d", c.index, s, c.step)
+	for _, tt := range tests {
+		if got := ModeLambdaForQuality(tt.quality); got != tt.mode {
+			t.Errorf("ModeLambdaForQuality(%d) = %d, want %d", tt.quality, got, tt.mode)
 		}
-		if got, want := Lambda(q), c.slope; got != want {
-			t.Fatalf("Lambda(index %d) = %d, want %d", c.index, got, want)
+		if got := TrellisLambdaForQuality(tt.quality); got != tt.trellis {
+			t.Errorf("TrellisLambdaForQuality(%d) = %d, want %d", tt.quality, got, tt.trellis)
 		}
 	}
+}
 
-	// No step in the normative table lands on an exact half: the
-	// numerator residue is never half the denominator.
+func TestLambdasAreMonotoneAndDistinct(t *testing.T) {
+	prevMode, prevTrellis := int64(0), int64(0)
 	for idx := 0; idx <= 127; idx++ {
-		s := int64(quantize.New(quantize.Index(idx)).Y1.AC)
-		if residue := (lambdaNumerator * s * s) % lambdaDenominator; residue == lambdaDenominator/2 {
-			t.Fatalf("index %d: step %d lands on an exact half, the impossible case", idx, s)
+		q := quantize.New(quantize.Index(idx))
+		mode, trellis := ModeLambda(q), TrellisLambda(q)
+		if mode < prevMode || trellis < prevTrellis {
+			t.Fatalf("lambda decreased at index %d: mode %d->%d trellis %d->%d",
+				idx, prevMode, mode, prevTrellis, trellis)
+		}
+		if trellis < mode {
+			t.Fatalf("index %d: trellis lambda %d below mode lambda %d", idx, trellis, mode)
+		}
+		prevMode, prevTrellis = mode, trellis
+	}
+	if ModeLambdaForQuality(75) == TrellisLambdaForQuality(75) {
+		t.Fatal("default-quality mode and trellis lambdas unexpectedly coincide")
+	}
+}
+
+func TestLambdasClampWithQualityAndStayPositive(t *testing.T) {
+	for _, pair := range [][2]int{{-3, 0}, {107, 100}} {
+		if got, want := ModeLambdaForQuality(pair[0]), ModeLambdaForQuality(pair[1]); got != want {
+			t.Errorf("mode quality %d = %d, want quality %d value %d", pair[0], got, pair[1], want)
+		}
+		if got, want := TrellisLambdaForQuality(pair[0]), TrellisLambdaForQuality(pair[1]); got != want {
+			t.Errorf("trellis quality %d = %d, want quality %d value %d", pair[0], got, pair[1], want)
+		}
+	}
+	for quality := 0; quality <= 100; quality++ {
+		if ModeLambdaForQuality(quality) < 1 || TrellisLambdaForQuality(quality) < 1 {
+			t.Fatalf("quality %d produced a non-positive lambda", quality)
 		}
 	}
 }

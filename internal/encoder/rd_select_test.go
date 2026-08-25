@@ -87,11 +87,11 @@ func TestRDPruningFloors(t *testing.T) {
 	// Gate arithmetic: attempt iff the floor cannot tie or beat.
 	best := rdCandidate{ordinal: 0, score: 1 << 20}
 	floor := cost.BPredFlag() + cost.Cost(16)*(rdSubModeFloor+rdBlockFloor)
-	if int64(floor)*enc.lambda >= best.score {
+	if int64(floor)*enc.modeLambda >= best.score {
 		t.Fatalf("gate would prune a candidate whose floor strictly beats the incumbent")
 	}
-	tight := rdCandidate{ordinal: 0, score: int64(floor) * enc.lambda}
-	if int64(floor)*enc.lambda < tight.score {
+	tight := rdCandidate{ordinal: 0, score: int64(floor) * enc.modeLambda}
+	if int64(floor)*enc.modeLambda < tight.score {
 		t.Fatalf("gate admitted an exact tie, which the canonical order awards to the whole block")
 	}
 }
@@ -428,15 +428,29 @@ func TestRDSearchMatchesIndependentOracle(t *testing.T) {
 						}
 					}
 					restore := enc.rdSaveRegion(mbx, mby, mb)
-					// rdWalkBPred reads the frame-level sub-mode
+					// The walks read the frame-level sub-mode
 					// shadows directly; inject the entering state
 					// the replay carries so the probe prices what
 					// the search priced at this macroblock.
 					enc.rdSubAbove[mbx] = o.subAbove[mbx]
 					enc.rdSubLeft = o.subLeft
 					hugeBest := rdCandidate{ordinal: 0, score: int64(1) << 62}
-					pbp, _, _, _ := enc.rdWalkBPred(mbx, mby, &hugeBest, &tok, chromaEmpty)
+					pbp, _, _, _ := enc.rdWalkBPredWithCoeffSearch(mbx, mby, &hugeBest, &tok, chromaEmpty, false, false)
 					restore()
+
+					bestWhole := want.whole[0]
+					for m := predict.Mode(1); m < predict.NumModes; m++ {
+						if want.whole[m].betterThan(bestWhole) {
+							bestWhole = want.whole[m]
+						}
+					}
+					if pbp.betterThan(bestWhole) && enc.coeffSearchAllowed() {
+						refined, _, _, completed := enc.rdWalkBPredWithCoeffSearch(mbx, mby, &pbp, &tok, chromaEmpty, true, false)
+						restore()
+						if completed && refined.betterThan(pbp) {
+							pbp = refined
+						}
+					}
 					if pbp != want.bp {
 						t.Fatalf("macroblock (%d,%d): production B_PRED candidate %+v, oracle %+v", mbx, mby, pbp, want.bp)
 					}
@@ -530,8 +544,18 @@ func (o *rdOracle) decideEntering(mbx, mby int) oracleDecision {
 		}
 	}
 
-	bp, subs := o.scoreBPred(mbx, mby, src, &tok)
+	bp, subs := o.scoreBPred(mbx, mby, src, &tok, false)
 	if bp.betterThan(best.cand) {
+		// Method 6 refines only an already-admitted B_PRED candidate.
+		// The trellis-scaled proposal replaces it only when the complete
+		// mode objective improves strictly; a loss or tie keeps the
+		// retained-coefficient candidate and its reconstruction.
+		if e.coeffSearchAllowed() {
+			refined, refinedSubs := o.scoreBPred(mbx, mby, src, &tok, true)
+			if refined.betterThan(bp) {
+				bp, subs = refined, refinedSubs
+			}
+		}
 		return oracleDecision{bpred: true, ordinal: bp.ordinal, subModes: subs, whole: whole, bp: bp}
 	}
 	return oracleDecision{ordinal: best.cand.ordinal, whole: whole, bp: bp}
@@ -609,7 +633,7 @@ func (o *rdOracle) scoreWhole(mbx, mby int, m predict.Mode, src []uint8, tok *rd
 		// all; any other candidate pays every token it priced.
 		rate += tokenRate
 	}
-	return rdCandidate{ordinal: int(m), sse: sse, rate: rate, score: sse<<8 + int64(rate)*e.lambda}, coding
+	return rdCandidate{ordinal: int(m), sse: sse, rate: rate, score: sse<<8 + int64(rate)*e.modeLambda}, coding
 }
 
 // priceWholeTokens charges the Y2 block and the sixteen luma blocks of
@@ -642,7 +666,7 @@ func (o *rdOracle) priceWholeTokens(y2Levels *[16]int16, luma *[16][16]int16, to
 
 // scoreBPred mirrors the sixteen-block candidate pricing on a saved and
 // restored copy of the macroblock's reconstruction area.
-func (o *rdOracle) scoreBPred(mbx, mby int, src []uint8, tok *rdTokenView) (rdCandidate, [16]predict.SubMode) {
+func (o *rdOracle) scoreBPred(mbx, mby int, src []uint8, tok *rdTokenView, refineCoeffs bool) (rdCandidate, [16]predict.SubMode) {
 	e := o.enc
 	x0, y0 := mbx*16, mby*16
 	var saved [16][16]uint8
@@ -716,7 +740,7 @@ func (o *rdOracle) scoreBPred(mbx, mby int, src []uint8, tok *rdTokenView) (rdCa
 		// inverse transform, add to this block's predictor, clamp,
 		// squared error against src -- and exact BlockCost under
 		// the entering context. Ties go to the earliest candidate.
-		if e.coeffSearchAllowed() {
+		if refineCoeffs && e.coeffSearchAllowed() {
 			ctx := int(leftLuma[b/4] + upLuma[b%4])
 			dist := func(cand *[16]int16) int64 {
 				raster := fromScanOrder(cand)
@@ -735,7 +759,7 @@ func (o *rdOracle) scoreBPred(mbx, mby int, src []uint8, tok *rdTokenView) (rdCa
 				}
 				return blockSSE
 			}
-			winner, _ := searchCoeffCandidates(token.YWithDC, ctx, 0, &lumaLevels[b], e.lambda, dist)
+			winner, _ := searchCoeffCandidates(token.YWithDC, ctx, 0, &lumaLevels[b], e.trellisLambda, dist)
 			lumaLevels[b] = winner
 		}
 
@@ -763,7 +787,7 @@ func (o *rdOracle) scoreBPred(mbx, mby int, src []uint8, tok *rdTokenView) (rdCa
 	if !skipPossible {
 		rate += tokenRate
 	}
-	return rdCandidate{ordinal: rdOrdinalBPred, bpred: true, sse: sse, rate: rate, score: sse<<8 + int64(rate)*e.lambda}, subs
+	return rdCandidate{ordinal: rdOrdinalBPred, bpred: true, sse: sse, rate: rate, score: sse<<8 + int64(rate)*e.modeLambda}, subs
 }
 
 // advance replays the shadow update the production search performs
@@ -854,7 +878,19 @@ func TestRDOracleRowReset(t *testing.T) {
 					predict.Predict(enc.predY[:], 16, 16, m, nb)
 					whole[m], _ = o.scoreWhole(0, 1, m, src, &tok)
 				}
-				bp, _ := o.scoreBPred(0, 1, src, &tok)
+				bp, _ := o.scoreBPred(0, 1, src, &tok, false)
+				bestWhole := whole[0]
+				for m := predict.Mode(1); m < predict.NumModes; m++ {
+					if whole[m].betterThan(bestWhole) {
+						bestWhole = whole[m]
+					}
+				}
+				if bp.betterThan(bestWhole) && enc.coeffSearchAllowed() {
+					refined, _ := o.scoreBPred(0, 1, src, &tok, true)
+					if refined.betterThan(bp) {
+						bp = refined
+					}
+				}
 				return whole, bp
 			}
 			winner := func(whole [4]rdCandidate, bp rdCandidate) rdCandidate {
@@ -1209,7 +1245,7 @@ func TestRDSkipAwareBareRates(t *testing.T) {
 					t.Fatalf("macroblock (%d,%d): oracle whole-block mode %d rate %d, production %d", mbx, mby, m, ocand.rate, pWhole[m].rate)
 				}
 			}
-			ocand, osubs := o.scoreBPred(mbx, mby, src, &otok)
+			ocand, osubs := o.scoreBPred(mbx, mby, src, &otok, true)
 			if ocand.rate != pBP.rate {
 				t.Fatalf("macroblock (%d,%d): oracle B_PRED rate %d, production %d", mbx, mby, ocand.rate, pBP.rate)
 			}

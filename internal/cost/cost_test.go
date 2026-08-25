@@ -236,7 +236,8 @@ func TestPrimitivesAreConcurrencySafe(t *testing.T) {
 				sum += ProbUpdateCost(token.UpdateProbs[i%4][i%8][i%3][i%11], i%17 == 0)
 				sum += SegmentIDCost(&segs, uint8(i%4))
 				sum += SkipCost(uint8(i%255)+1, i%3 == 0)
-				sum += Cost(LambdaForQuality(i % 101))
+				sum += Cost(ModeLambdaForQuality(i % 101))
+				sum += Cost(TrellisLambdaForQuality(i % 101))
 			}
 			if sum < 0 {
 				t.Error("impossible negative sum")

@@ -208,7 +208,7 @@ func (c rdCandidate) betterThan(best rdCandidate) bool {
 // 256*255^2 and the rate of one macroblock's luma well under a few
 // thousand bits, so the product cannot overflow.
 func (e *encoder) rdScore(sse int64, rate cost.Cost) int64 {
-	return sse<<8 + int64(rate)*e.lambda
+	return sse<<8 + int64(rate)*e.modeLambda
 }
 
 // rdTokenView is the token-neighbour state one macroblock's candidates
@@ -652,6 +652,16 @@ func (w *rdBPredWalk) codeBlock(bx, by, b int, sub predict.SubMode, nb *predict.
 // sub-mode share is always paid, while its token share joins only once
 // tokens are certain, because a still-possible skipped finish pays none.
 func (e *encoder) rdWalkBPred(mbx, mby int, best *rdCandidate, tok *rdTokenView, chromaEmpty bool) (cand rdCandidate, subModes [16]predict.SubMode, lumaLevels [16][16]int16, won bool) {
+	return e.rdWalkBPredWithCoeffSearch(mbx, mby, best, tok, chromaEmpty, e.coeffSearchAllowed(), true)
+}
+
+// rdWalkBPredWithCoeffSearch is rdWalkBPred with an explicit coefficient-
+// refinement switch. Method 6 uses an unrefined pass for mode selection and
+// a refined pass only after B_PRED is admitted; focused tests use the wrapper
+// above to exercise the effort-configured production walk directly.
+// countAbort is false for the optional refinement pass because abandoning that
+// pass does not abandon the already-admitted macroblock candidate.
+func (e *encoder) rdWalkBPredWithCoeffSearch(mbx, mby int, best *rdCandidate, tok *rdTokenView, chromaEmpty, refineCoeffs, countAbort bool) (cand rdCandidate, subModes [16]predict.SubMode, lumaLevels [16][16]int16, won bool) {
 	x0, y0 := mbx*16, mby*16
 	paddedWidth := ((e.src.Width + 15) / 16) * 16
 	var nb predict.SubNeighbors
@@ -659,7 +669,7 @@ func (e *encoder) rdWalkBPred(mbx, mby int, best *rdCandidate, tok *rdTokenView,
 
 	w := rdBPredWalk{
 		enc:               e,
-		coeffSearchActive: e.coeffSearchAllowed(),
+		coeffSearchActive: refineCoeffs && e.coeffSearchAllowed(),
 		aboveCtx:          e.rdSubAbove[mbx],
 		leftCtx:           e.rdSubLeft,
 		left:              tok.leftLuma,
@@ -695,7 +705,9 @@ func (e *encoder) rdWalkBPred(mbx, mby int, best *rdCandidate, tok *rdTokenView,
 				remaining += cost.Cost(15-b) * e.blockEOBFloor()
 			}
 			if e.rdScore(w.sse, w.records+w.certTokens+remaining) >= best.score {
-				e.rd.BpredAborts++
+				if countAbort {
+					e.rd.BpredAborts++
+				}
 				return rdCandidate{}, subModes, lumaLevels, false
 			}
 		}
@@ -748,13 +760,45 @@ func (e *encoder) rdTryBPred(mbx, mby int, mb *macroblock, best *rdCandidate, to
 		}
 	}()
 
-	cand, subModes, lumaLevels, completed := e.rdWalkBPred(mbx, mby, best, tok, chromaEmpty)
+	// Mode selection first sees the retained quantizer output under the
+	// mode lambda. Coefficient refinement uses a much larger trellis lambda;
+	// applying it before this boundary can make a heavily thinned B_PRED
+	// candidate displace the whole-block path and collapse quality.
+	cand, subModes, lumaLevels, completed := e.rdWalkBPredWithCoeffSearch(mbx, mby, best, tok, chromaEmpty, false, true)
 	if !completed || !cand.betterThan(*best) {
 		// Abandoned early, finished without beating the
 		// incumbent, or merely tying it: ties belong to the
 		// lower ordinal, and B_PRED is the last one.
 		restore()
 		return
+	}
+
+	// Preserve the admitted candidate and its reconstruction. Method 6 may
+	// now spend bounded work on coefficient search and trellis, starting from
+	// the same entering reconstruction. The refined result replaces the
+	// admitted result only on a strict full-objective win; ties and losses keep
+	// the earlier candidate byte-for-byte.
+	if e.coeffSearchAllowed() {
+		admittedCand := cand
+		admittedSubModes := subModes
+		admittedLevels := lumaLevels
+		x0, y0 := mbx*16, mby*16
+		var admittedRecon [16][16]uint8
+		for r := 0; r < 16; r++ {
+			copy(admittedRecon[r][:], e.rec.Y[(y0+r)*e.rec.YStride+x0:][:16])
+		}
+
+		restore()
+		refinedCand, refinedSubModes, refinedLevels, refinedComplete :=
+			e.rdWalkBPredWithCoeffSearch(mbx, mby, &admittedCand, tok, chromaEmpty, true, false)
+		if refinedComplete && refinedCand.betterThan(admittedCand) {
+			cand, subModes, lumaLevels = refinedCand, refinedSubModes, refinedLevels
+		} else {
+			cand, subModes, lumaLevels = admittedCand, admittedSubModes, admittedLevels
+			for r := 0; r < 16; r++ {
+				copy(e.rec.Y[(y0+r)*e.rec.YStride+x0:][:16], admittedRecon[r][:])
+			}
+		}
 	}
 
 	// Winner: commit the candidate's record now. The reconstruction
@@ -789,7 +833,7 @@ func (e *encoder) rdBPredGate(best *rdCandidate, chromaEmpty bool) bool {
 		blockFloor = e.blockEOBFloor()
 	}
 	floor := cost.BPredFlag() + cost.Cost(16)*(rdSubModeFloor+blockFloor)
-	return int64(floor)*e.lambda < best.score
+	return int64(floor)*e.modeLambda < best.score
 }
 
 // rdSaveRegion snapshots the macroblock record and its 16x16 area of

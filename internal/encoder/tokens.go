@@ -70,10 +70,14 @@ func writeChromaMode(enc *boolenc.Encoder, m predict.Mode) {
 
 // minProbOptMethod is the lowest effort level whose encode measures the
 // real token statistics and writes per-node coefficient-probability
-// updates. It mirrors minCoeffTrellisMethod: both refinements price
-// exactly and ship only strict wins, and both cost a full extra pass, so
-// they sit behind the same effort boundary.
-const minProbOptMethod = 6
+// updates. Histogram collection and header selection do not re-run mode
+// analysis, so this dense, low-overhead win starts at the normal RD tier;
+// Method 6 separately adds coefficient candidate search and trellis.
+const minProbOptMethod = 5
+
+// minProbReconsiderMethod is the maximum-effort boundary for one additional
+// mode-analysis pass under the probability table measured from the first.
+const minProbReconsiderMethod = 6
 
 // mbContext holds the coefficient contexts one macroblock hands to its
 // neighbours. The decoder keeps the same state in its own left and above

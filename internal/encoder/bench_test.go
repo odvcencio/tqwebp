@@ -39,6 +39,17 @@ func BenchmarkEncodeScreenshot(b *testing.B) {
 // BenchmarkEncodeCorpusPhoto encodes the committed corpus photograph, so
 // the benchmark reading and the gate reading measure the same picture.
 func BenchmarkEncodeCorpusPhoto(b *testing.B) {
+	benchmarkEncodeCorpusPhoto(b, 4)
+}
+
+// BenchmarkEncodeCorpusPhotoMethod6 tracks the production-quality effort
+// separately so its extra rate-distortion work stays visible while the
+// default path is tuned.
+func BenchmarkEncodeCorpusPhotoMethod6(b *testing.B) {
+	benchmarkEncodeCorpusPhoto(b, 6)
+}
+
+func benchmarkEncodeCorpusPhoto(b *testing.B, method int) {
 	images, err := corpus.LoadAll(moduleRoot)
 	if err != nil {
 		b.Fatal(err)
@@ -51,7 +62,7 @@ func BenchmarkEncodeCorpusPhoto(b *testing.B) {
 			px = im.Spec.Width * im.Spec.Height
 		}
 	}
-	cfg := Config{Quality: 75, Method: 4}
+	cfg := Config{Quality: 75, Method: method}
 	b.SetBytes(int64(px))
 	for i := 0; i < b.N; i++ {
 		var buf byteWriter

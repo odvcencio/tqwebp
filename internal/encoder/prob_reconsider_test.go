@@ -14,46 +14,52 @@ import (
 	"m31labs.dev/tqwebp/oracle"
 )
 
-// TestRunFrameReconsidersUnderFrozenProbs pins the Slice 6A production
-// walk of runFrame end to end on one known profitable Method 6 fixture:
-// exactly one probability derivation, exactly one reconsideration pass,
-// the derived table both frozen in the encoder state and installed as
-// the active pricing table, and a serialization that is byte-stable
-// across repeated calls without disturbing any of that state. The
+// TestRunFrameFreezesFinalTokenProbsSinglePass pins the normal-effort
+// production walk end to end on one known profitable Method 5 fixture: one
+// analysis, exactly one probability derivation from its final records, a
+// derived table frozen for serialization, and byte-stable repeated writes.
+// The single-pass boundary is explicit: runFrame must leave the same records,
+// reconstruction, and RD counters as a plain run. The
 // shipped frame must still decode, through the independent decoder, to
 // pixels equal to the encoder's own reconstruction.
-func TestRunFrameReconsidersUnderFrozenProbs(t *testing.T) {
-	enc := newEncoder(yuv.Convert(bpredDetailRGBA(64, 48, 101)), Config{Quality: 90, Method: 6})
+func TestRunFrameFreezesFinalTokenProbsSinglePass(t *testing.T) {
+	src := yuv.Convert(bpredDetailRGBA(64, 48, 101))
+	cfg := Config{Quality: 90, Method: 5}
+	plain := newEncoder(src, cfg)
+	plain.run()
+
+	enc := newEncoder(src, cfg)
 
 	enc.runFrame()
 
-	// The refinement ran to completion and reconsidered the analysis:
-	// probReconsiderations is 1 only when a derived table actually
-	// shipped, so this assertion doubles as the profitability check --
-	// if it fails here, bpredDetailRGBA(64, 48, 101) at Quality 90 no
-	// longer yields strictly-profitable updates and cannot exercise
-	// this path at all.
+	// This fixture yields strictly-profitable updates, so it exercises
+	// the frozen-table path rather than only the completed derivation.
 	if !enc.probOptimizationDone {
 		t.Fatal("fixture not profitable: runFrame did not complete its probability derivation (probOptimizationDone false)")
 	}
 	if enc.probDerivations != 1 {
 		t.Fatalf("probDerivations = %d, want exactly 1", enc.probDerivations)
 	}
-	if enc.probReconsiderations != 1 {
-		t.Fatal("fixture not profitable: runFrame never re-ran under derived probabilities (probReconsiderations != 1)")
-	}
 	if enc.frozenTokenProbs == nil {
 		t.Fatal("fixture not profitable: no table was frozen (frozenTokenProbs nil)")
 	}
-	if enc.rateProbs != enc.frozenTokenProbs {
-		t.Fatal("rateProbs does not point at the frozen token probability table")
+	if enc.rateProbs != &token.DefaultProbs {
+		t.Fatal("single-pass analysis did not retain the default RD pricing table")
+	}
+	if !reflect.DeepEqual(enc.mbs, plain.mbs) {
+		t.Fatal("runFrame changed macroblock records after the single analysis pass")
+	}
+	if enc.rd != plain.rd {
+		t.Fatalf("runFrame changed RD counters after analysis: %+v vs %+v", enc.rd, plain.rd)
+	}
+	if !bytes.Equal(enc.rec.Y, plain.rec.Y) || !bytes.Equal(enc.rec.U, plain.rec.U) || !bytes.Equal(enc.rec.V, plain.rec.V) {
+		t.Fatal("runFrame changed reconstruction after the single analysis pass")
 	}
 
 	// Snapshot every piece of state the serialization must leave alone.
 	frozen := enc.frozenTokenProbs
 	done := enc.probOptimizationDone
 	derivations := enc.probDerivations
-	reconsiderations := enc.probReconsiderations
 	rdBefore := enc.rd
 
 	first, err := enc.frameBytes()
@@ -75,17 +81,14 @@ func TestRunFrameReconsidersUnderFrozenProbs(t *testing.T) {
 	if enc.frozenTokenProbs != frozen {
 		t.Error("frameBytes replaced the frozen probability table")
 	}
-	if enc.rateProbs != frozen {
-		t.Error("frameBytes changed the active rateProbs pointer")
+	if enc.rateProbs != &token.DefaultProbs {
+		t.Error("frameBytes changed the analysis pricing table")
 	}
 	if enc.probOptimizationDone != done {
 		t.Errorf("probOptimizationDone changed from %v to %v", done, enc.probOptimizationDone)
 	}
 	if enc.probDerivations != derivations {
 		t.Errorf("probDerivations changed from %d to %d", derivations, enc.probDerivations)
-	}
-	if enc.probReconsiderations != reconsiderations {
-		t.Errorf("probReconsiderations changed from %d to %d", reconsiderations, enc.probReconsiderations)
 	}
 	if enc.rd != rdBefore {
 		t.Errorf("rd stats changed across frameBytes: %+v -> %+v", rdBefore, enc.rd)
@@ -107,13 +110,42 @@ func TestRunFrameReconsidersUnderFrozenProbs(t *testing.T) {
 	}
 }
 
+// TestRunFrameMethod6ReconsidersAndRederives proves maximum effort performs
+// exactly one bounded entropy-price reconsideration and, critically, derives
+// the serialized table again from the final records rather than shipping the
+// now-stale first-pass histogram.
+func TestRunFrameMethod6ReconsidersAndRederives(t *testing.T) {
+	enc := newEncoder(yuv.Convert(bpredDetailRGBA(64, 48, 101)), Config{Quality: 90, Method: 6})
+	enc.runFrame()
+
+	if !enc.probOptimizationDone {
+		t.Fatal("probability optimization did not complete")
+	}
+	if enc.probDerivations != 2 {
+		t.Fatalf("probDerivations = %d, want exactly 2", enc.probDerivations)
+	}
+	if enc.probReconsiderations != 1 {
+		t.Fatalf("probReconsiderations = %d, want exactly 1", enc.probReconsiderations)
+	}
+	if enc.frozenTokenProbs == nil {
+		t.Fatal("profitable final records produced no frozen table")
+	}
+	if enc.rateProbs == &token.DefaultProbs {
+		t.Fatal("Method 6 reconsideration did not install first-pass probabilities for RD pricing")
+	}
+	want := enc.optimizeTokenProbs()
+	if want == nil || *want != *enc.frozenTokenProbs {
+		t.Fatal("serialized probability table was not re-derived from final records")
+	}
+}
+
 // TestRunFrameProbOptOffRecordsDerivationOnly pins the disabled-refinement
 // walk of runFrame: with rdProbOptOff set, Method 6 still derives token
 // probabilities exactly once -- so probOptimizationDone and
 // probDerivations record the completed pass -- but no update ships, so
-// nothing is frozen, no reconsideration runs, and pricing stays on the
-// default table. Serialization must be byte-stable across repeated calls
-// without disturbing any of that state.
+// nothing is frozen and pricing stays on the default table. Serialization
+// must be byte-stable across repeated calls without disturbing any of that
+// state.
 func TestRunFrameProbOptOffRecordsDerivationOnly(t *testing.T) {
 	enc := newEncoder(yuv.Convert(bpredDetailRGBA(64, 48, 101)), Config{Quality: 90, Method: 6})
 	enc.rdProbOptOff = true
@@ -127,7 +159,7 @@ func TestRunFrameProbOptOffRecordsDerivationOnly(t *testing.T) {
 		t.Fatalf("probDerivations = %d, want exactly 1", enc.probDerivations)
 	}
 	if enc.probReconsiderations != 0 {
-		t.Fatalf("probReconsiderations = %d, want 0 (nothing may ship with the refinement off)", enc.probReconsiderations)
+		t.Fatalf("probReconsiderations = %d, want 0 with probability optimization disabled", enc.probReconsiderations)
 	}
 	if enc.frozenTokenProbs != nil {
 		t.Fatal("frozenTokenProbs is non-nil; a disabled refinement must never freeze a table")
@@ -138,7 +170,6 @@ func TestRunFrameProbOptOffRecordsDerivationOnly(t *testing.T) {
 
 	done := enc.probOptimizationDone
 	derivations := enc.probDerivations
-	reconsiderations := enc.probReconsiderations
 
 	first, err := enc.frameBytes()
 	if err != nil {
@@ -153,11 +184,9 @@ func TestRunFrameProbOptOffRecordsDerivationOnly(t *testing.T) {
 		t.Fatalf("repeated frameBytes differ (%d vs %d bytes)", len(first), len(second))
 	}
 
-	if enc.probOptimizationDone != done ||
-		enc.probDerivations != derivations ||
-		enc.probReconsiderations != reconsiderations {
-		t.Errorf("frameBytes changed refinement counters: done=%v->%v derivations=%d->%d reconsiderations=%d->%d",
-			done, enc.probOptimizationDone, derivations, enc.probDerivations, reconsiderations, enc.probReconsiderations)
+	if enc.probOptimizationDone != done || enc.probDerivations != derivations {
+		t.Errorf("frameBytes changed refinement counters: done=%v->%v derivations=%d->%d",
+			done, enc.probOptimizationDone, derivations, enc.probDerivations)
 	}
 	if enc.frozenTokenProbs != nil {
 		t.Error("frameBytes froze a probability table")
@@ -176,7 +205,7 @@ func TestRunFrameProbOptOffRecordsDerivationOnly(t *testing.T) {
 func TestRunFrameBelowBoundaryEqualsPlainRun(t *testing.T) {
 	src := yuv.Convert(bpredDetailRGBA(64, 48, 7))
 
-	for m := 0; m <= 5; m++ {
+	for m := 0; m < minProbOptMethod; m++ {
 		refined := newEncoder(src, Config{Quality: 75, Method: m})
 		refined.runFrame()
 		payloadRefined, err := refined.frameBytes()
@@ -206,9 +235,12 @@ func TestRunFrameBelowBoundaryEqualsPlainRun(t *testing.T) {
 		if refined.probOptimizationDone {
 			t.Errorf("method %d: runFrame set probOptimizationDone below the boundary", m)
 		}
-		if refined.probDerivations != 0 || refined.probReconsiderations != 0 {
-			t.Errorf("method %d: runFrame counted refinements below the boundary (derivations=%d reconsiderations=%d)",
-				m, refined.probDerivations, refined.probReconsiderations)
+		if refined.probDerivations != 0 {
+			t.Errorf("method %d: runFrame counted a probability derivation below the boundary (%d)",
+				m, refined.probDerivations)
+		}
+		if refined.probReconsiderations != 0 {
+			t.Errorf("method %d: runFrame reconsidered below the boundary", m)
 		}
 		if refined.frozenTokenProbs != nil {
 			t.Errorf("method %d: runFrame froze a table below the boundary", m)
@@ -250,8 +282,8 @@ func TestRunFrameDeterminismAcrossGOMAXPROCS(t *testing.T) {
 		if !enc.probOptimizationDone {
 			t.Fatalf("GOMAXPROCS=%d: runFrame did not complete its probability derivation (probOptimizationDone false)", procs)
 		}
-		if enc.probDerivations != 1 {
-			t.Fatalf("GOMAXPROCS=%d: probDerivations = %d, want exactly 1", procs, enc.probDerivations)
+		if enc.probDerivations != 2 {
+			t.Fatalf("GOMAXPROCS=%d: probDerivations = %d, want exactly 2", procs, enc.probDerivations)
 		}
 		if enc.probReconsiderations != 1 {
 			t.Fatalf("GOMAXPROCS=%d: probReconsiderations = %d, want exactly 1", procs, enc.probReconsiderations)
@@ -311,7 +343,7 @@ func TestRunFrameDeterminismAcrossGOMAXPROCS(t *testing.T) {
 // fixture carries no coefficient tokens whose branch counts could ever
 // price an update above its signalling cost, so the Slice 6A derivation
 // completes exactly once, records the completed pass, and keeps the
-// default table -- nothing frozen, nothing reconsidered. The refinement
+// default table, so nothing is frozen. The refinement
 // itself runs normally (rdProbOptOff stays false); only the ledger comes
 // up empty. Serialization must be byte-stable across repeated calls, and
 // the shipped frame must still decode, through the independent decoder,
@@ -331,7 +363,7 @@ func TestRunFrameNoWinUniformFlatRecordsDerivationOnly(t *testing.T) {
 		t.Fatalf("probDerivations = %d, want exactly 1", enc.probDerivations)
 	}
 	if enc.probReconsiderations != 0 {
-		t.Fatalf("probReconsiderations = %d, want 0 (a no-win fixture must never trigger a reconsideration)", enc.probReconsiderations)
+		t.Fatalf("probReconsiderations = %d, want 0 for a no-win derivation", enc.probReconsiderations)
 	}
 	if enc.frozenTokenProbs != nil {
 		t.Fatal("frozenTokenProbs is non-nil; a no-win derivation must never freeze a table")

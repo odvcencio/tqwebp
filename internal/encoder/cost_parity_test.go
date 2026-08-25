@@ -215,7 +215,7 @@ func replayFrame(t *testing.T, enc *encoder, data []byte) {
 
 	var stream acc // reference price of everything the streams carry
 	dec := boolenc.NewDecoder(fp)
-	skipProb, model := replayHeader(t, &stream, dec, enc)
+	skipProb, model, probs := replayHeader(t, &stream, dec, enc)
 	model += replayMacroblocks(t, &stream, dec, enc, skipProb)
 
 	if got := stream.total; got != int64(model) {
@@ -223,7 +223,7 @@ func replayFrame(t *testing.T, enc *encoder, data []byte) {
 	}
 	checkPartitionZeroBytes(t, model, len(fp))
 
-	replayTokens(t, enc, tp)
+	replayTokens(t, enc, tp, &probs)
 }
 
 // framePartitions splits the encoded file into the first partition and
@@ -242,8 +242,9 @@ func framePartitions(t *testing.T, data []byte) (fp, tp []byte) {
 
 // replayHeader walks the frame header, mirroring frame.WriteHeader, and
 // asserts every parsed field against the encoder's own state. It returns
-// the signalled skip probability and the header's model price.
-func replayHeader(t *testing.T, a *acc, dec *boolenc.Decoder, enc *encoder) (skipProb uint8, model cost.Cost) {
+// the signalled skip probability, the header's model price, and the
+// coefficient-probability table the token partition uses.
+func replayHeader(t *testing.T, a *acc, dec *boolenc.Decoder, enc *encoder) (skipProb uint8, model cost.Cost, probs token.Probs) {
 	a.d(dec, 128) // colour space
 	a.d(dec, 128) // clamping type
 	if seg := a.d(dec, 128); seg {
@@ -263,8 +264,21 @@ func replayHeader(t *testing.T, a *acc, dec *boolenc.Decoder, enc *encoder) (ski
 	if refresh := a.d(dec, 128); !refresh {
 		t.Fatal("key frame must signal probability refresh")
 	}
-	if updates := replayProbUpdates(a, dec); updates != 0 {
-		t.Fatalf("%d probability updates in a defaults-only frame", updates)
+	probs, updateModel := replayProbUpdates(a, dec)
+	expectedProbs := token.DefaultProbs
+	if enc.cfg.Method >= minProbOptMethod {
+		var optimized *token.Probs
+		if enc.probOptimizationDone {
+			optimized = enc.frozenTokenProbs
+		} else {
+			optimized = enc.optimizeTokenProbs()
+		}
+		if optimized != nil {
+			expectedProbs = *optimized
+		}
+	}
+	if probs != expectedProbs {
+		t.Fatal("parsed coefficient probabilities disagree with the encoder's frozen table")
 	}
 	if inUse := a.d(dec, 128); !inUse {
 		t.Fatal("skip flag must be signalled in use")
@@ -274,45 +288,31 @@ func replayHeader(t *testing.T, a *acc, dec *boolenc.Decoder, enc *encoder) (ski
 	// Header model: the same decisions priced by the public API.
 	model = cost.PlainBit*12 /* fixed flags */ +
 		cost.Literal(6+3+2+7+8) /* literals incl. skip prob */ +
-		probUpdateModelCost()
+		updateModel
 
 	assertHeaderFields(t, enc, filterSimple, filterLevel, sharpness, quantIndex, skipProb)
-	return skipProb, model
+	return skipProb, model, probs
 }
 
 // replayProbUpdates reads the coefficient-probability update grid and
-// returns how many updates the stream actually carried.
-func replayProbUpdates(a *acc, dec *boolenc.Decoder) int {
-	updates := 0
+// independently prices it while rebuilding the table carried by the header.
+func replayProbUpdates(a *acc, dec *boolenc.Decoder) (probs token.Probs, model cost.Cost) {
+	probs = token.DefaultProbs
 	for i := 0; i < token.NumPlanes; i++ {
 		for j := 0; j < token.NumBands; j++ {
 			for k := 0; k < token.NumContexts; k++ {
 				for l := 0; l < token.NumProbs; l++ {
-					if upd := a.d(dec, token.UpdateProbs[i][j][k][l]); upd {
-						a.lit(dec, 8)
-						updates++
+					updateProb := token.UpdateProbs[i][j][k][l]
+					upd := a.d(dec, updateProb)
+					model += cost.ProbUpdateCost(updateProb, upd)
+					if upd {
+						probs[i][j][k][l] = uint8(a.lit(dec, 8))
 					}
 				}
 			}
 		}
 	}
-	return updates
-}
-
-// probUpdateModelCost prices the probability-update grid through the
-// public cost API.
-func probUpdateModelCost() cost.Cost {
-	var model cost.Cost
-	for i := 0; i < token.NumPlanes; i++ {
-		for j := 0; j < token.NumBands; j++ {
-			for k := 0; k < token.NumContexts; k++ {
-				for l := 0; l < token.NumProbs; l++ {
-					model += cost.ProbUpdateCost(token.UpdateProbs[i][j][k][l], false)
-				}
-			}
-		}
-	}
-	return model
+	return probs, model
 }
 
 // assertHeaderFields checks the parsed header fields against the
@@ -456,7 +456,7 @@ func readChromaMode(a *acc, dec *boolenc.Decoder) predict.Mode {
 // replayTokens walks the token partition, mirroring writeTokens, and
 // holds the stream's independent price against the cost model's charge
 // for the same records.
-func replayTokens(t *testing.T, enc *encoder, tp []byte) {
+func replayTokens(t *testing.T, enc *encoder, tp []byte, probs *token.Probs) {
 	dec2 := boolenc.NewDecoder(tp)
 	var tokens acc
 	above := make([]tokCtx, enc.mbw)
@@ -466,7 +466,7 @@ func replayTokens(t *testing.T, enc *encoder, tp []byte) {
 		left = tokCtx{}
 		for mbx := 0; mbx < enc.mbw; mbx++ {
 			mb := &enc.mbs[mby*enc.mbw+mbx]
-			modelTokens += replayMacroblockTokens(t, &tokens, dec2, mb, &above[mbx], &left)
+			modelTokens += replayMacroblockTokens(t, &tokens, dec2, mb, &above[mbx], &left, probs)
 		}
 	}
 	if got := tokens.total; got != int64(modelTokens) {
@@ -481,7 +481,7 @@ func replayTokens(t *testing.T, enc *encoder, tp []byte) {
 // returns their model price. A skipped macroblock carries no tokens but
 // still resets the coefficient contexts, preserving the Y2 carry only
 // for B_PRED macroblocks.
-func replayMacroblockTokens(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, up, left *tokCtx) cost.Cost {
+func replayMacroblockTokens(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, up, left *tokCtx, probs *token.Probs) cost.Cost {
 	if mb.skip {
 		prevLeftY2, prevUpY2 := left.y2, up.y2
 		*left = tokCtx{}
@@ -495,43 +495,43 @@ func replayMacroblockTokens(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb 
 	lumaPlane, lumaFirst := token.YAfterY2, 1
 	var model cost.Cost
 	if !mb.bpred {
-		model += replayY2Block(t, tokens, dec, mb, up, left)
+		model += replayY2Block(t, tokens, dec, mb, up, left, probs)
 	} else {
 		lumaPlane, lumaFirst = token.YWithDC, 0
 	}
-	model += replayLumaBlocks(t, tokens, dec, mb, up, left, lumaPlane, lumaFirst)
-	model += replayChromaBlocks(t, tokens, dec, mb, up, left)
+	model += replayLumaBlocks(t, tokens, dec, mb, up, left, lumaPlane, lumaFirst, probs)
+	model += replayChromaBlocks(t, tokens, dec, mb, up, left, probs)
 	return model
 }
 
 // replayY2Block reads the Y2 block of a whole-block macroblock.
-func replayY2Block(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, up, left *tokCtx) cost.Cost {
+func replayY2Block(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, up, left *tokCtx, probs *token.Probs) cost.Cost {
 	ctx := int(left.y2 + up.y2)
 	var levels [16]int16
-	gotNZ := readBlockLocal(tokens, dec, token.Y2, ctx, 0, &token.DefaultProbs, &levels)
+	gotNZ := readBlockLocal(tokens, dec, token.Y2, ctx, 0, probs, &levels)
 	if gotNZ != mb.nz[blockY2] || levels != mb.levels[blockY2] {
 		t.Fatal("Y2 block: parsed levels/nz disagree with the record")
 	}
-	model := cost.BlockCost(token.Y2, ctx, 0, &mb.levels[blockY2], &token.DefaultProbs)
+	model := cost.BlockCost(token.Y2, ctx, 0, &mb.levels[blockY2], probs)
 	nz := uint8(btoi(gotNZ))
 	left.y2, up.y2 = nz, nz
 	return model
 }
 
 // replayLumaBlocks reads the sixteen luma blocks.
-func replayLumaBlocks(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, up, left *tokCtx, lumaPlane, lumaFirst int) cost.Cost {
+func replayLumaBlocks(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, up, left *tokCtx, lumaPlane, lumaFirst int, probs *token.Probs) cost.Cost {
 	var model cost.Cost
 	for y := 0; y < 4; y++ {
 		nz := left.luma[y]
 		for x := 0; x < 4; x++ {
 			ctx := int(nz) + int(up.luma[x])
 			var levels [16]int16
-			gotNZ := readBlockLocal(tokens, dec, lumaPlane, ctx, lumaFirst, &token.DefaultProbs, &levels)
+			gotNZ := readBlockLocal(tokens, dec, lumaPlane, ctx, lumaFirst, probs, &levels)
 			idx := blockLuma + 4*y + x
 			if gotNZ != mb.nz[idx] || levels != mb.levels[idx] {
 				t.Fatalf("luma block %d: parsed levels/nz disagree with the record", idx)
 			}
-			model += cost.BlockCost(lumaPlane, ctx, lumaFirst, &mb.levels[idx], &token.DefaultProbs)
+			model += cost.BlockCost(lumaPlane, ctx, lumaFirst, &mb.levels[idx], probs)
 			nz = uint8(btoi(gotNZ))
 			up.luma[x] = nz
 		}
@@ -541,27 +541,27 @@ func replayLumaBlocks(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macro
 }
 
 // replayChromaBlocks reads the U plane's blocks, then the V plane's.
-func replayChromaBlocks(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, up, left *tokCtx) cost.Cost {
+func replayChromaBlocks(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, up, left *tokCtx, probs *token.Probs) cost.Cost {
 	var model cost.Cost
-	model += replayChromaPlaneBlocks(t, tokens, dec, mb, token.UV, blockU, &left.u, &up.u)
-	model += replayChromaPlaneBlocks(t, tokens, dec, mb, token.UV, blockV, &left.v, &up.v)
+	model += replayChromaPlaneBlocks(t, tokens, dec, mb, token.UV, blockU, &left.u, &up.u, probs)
+	model += replayChromaPlaneBlocks(t, tokens, dec, mb, token.UV, blockV, &left.v, &up.v, probs)
 	return model
 }
 
 // replayChromaPlaneBlocks reads one chroma plane's four blocks.
-func replayChromaPlaneBlocks(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, plane, base int, l, u *[2]uint8) cost.Cost {
+func replayChromaPlaneBlocks(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb *macroblock, plane, base int, l, u *[2]uint8, probs *token.Probs) cost.Cost {
 	var model cost.Cost
 	for y := 0; y < 2; y++ {
 		nz := l[y]
 		for x := 0; x < 2; x++ {
 			ctx := int(nz) + int(u[x])
 			var levels [16]int16
-			gotNZ := readBlockLocal(tokens, dec, plane, ctx, 0, &token.DefaultProbs, &levels)
+			gotNZ := readBlockLocal(tokens, dec, plane, ctx, 0, probs, &levels)
 			idx := base + 2*y + x
 			if gotNZ != mb.nz[idx] || levels != mb.levels[idx] {
 				t.Fatalf("block %d: parsed levels/nz disagree with the record", idx)
 			}
-			model += cost.BlockCost(plane, ctx, 0, &mb.levels[idx], &token.DefaultProbs)
+			model += cost.BlockCost(plane, ctx, 0, &mb.levels[idx], probs)
 			nz = uint8(btoi(gotNZ))
 			u[x] = nz
 		}

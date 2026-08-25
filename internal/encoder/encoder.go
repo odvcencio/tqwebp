@@ -106,10 +106,11 @@ type encoder struct {
 	// above it left there.
 	subCtxAbove [][4]predict.SubMode
 
-	// lambda is the integer rate-distortion slope of cost.Lambda for
-	// this frame's quantizer. Only the WP-2 slice 4 search of
-	// rd_select.go consumes it; earlier paths never read it.
-	lambda int64
+	// modeLambda prices whole-block versus B_PRED decisions. The separate
+	// trellisLambda prices nearby coefficient levels; conflating the much
+	// larger trellis slope with final mode selection destroys quality.
+	modeLambda    int64
+	trellisLambda int64
 
 	// rd accumulates the deterministic candidate and decision counters
 	// of the slice 4 search; tests read them to prove the search bound
@@ -154,7 +155,7 @@ type encoder struct {
 	rdProbOptOff bool
 
 	// frozenTokenProbs holds the probability table the last runFrame
-	// derived and priced against, or nil when no derivation shipped.
+	// derived for serialization, or nil when no derivation shipped.
 	frozenTokenProbs *token.Probs
 
 	// probOptimizationDone records whether runFrame completed its
@@ -167,10 +168,8 @@ type encoder struct {
 	// once that derivation completed.
 	probDerivations int
 
-	// probReconsiderations counts how many times runFrame reconsidered
-	// analysis under derived probabilities, that is, re-ran the frame
-	// after swapping in an optimized table; it is 1 only when such a
-	// second pass ran.
+	// probReconsiderations counts the bounded high-effort analyses run
+	// under a table derived from the preceding pass. It is at most one.
 	probReconsiderations int
 
 	// Scratch buffers, one macroblock wide, reused across the frame.
@@ -197,38 +196,20 @@ type neighborBuf struct {
 func newEncoder(src *yuv.Planes, cfg Config) *encoder {
 	q := quantize.New(quantize.IndexForQuality(cfg.Quality))
 	return &encoder{
-		cfg:          cfg,
-		src:          src,
-		rec:          yuv.NewPlanes(src.Width, src.Height),
-		q:            q,
-		mbw:          src.MBW,
-		mbh:          src.MBH,
-		mbs:          make([]macroblock, src.MBW*src.MBH),
-		subCtxAbove:  make([][4]predict.SubMode, src.MBW),
-		lambda:       cost.Lambda(q),
-		rateProbs:    &token.DefaultProbs,
-		rdTokenAbove: make([]mbContext, src.MBW),
-		rdSubAbove:   make([][4]predict.SubMode, src.MBW),
+		cfg:           cfg,
+		src:           src,
+		rec:           yuv.NewPlanes(src.Width, src.Height),
+		q:             q,
+		mbw:           src.MBW,
+		mbh:           src.MBH,
+		mbs:           make([]macroblock, src.MBW*src.MBH),
+		subCtxAbove:   make([][4]predict.SubMode, src.MBW),
+		modeLambda:    cost.ModeLambda(q),
+		trellisLambda: cost.TrellisLambda(q),
+		rateProbs:     &token.DefaultProbs,
+		rdTokenAbove:  make([]mbContext, src.MBW),
+		rdSubAbove:    make([][4]predict.SubMode, src.MBW),
 	}
-}
-
-// resetAnalysis replaces every mutable per-analysis state of the frame
-// with the state a fresh newEncoder(e.src, e.cfg) would carry: new
-// reconstruction planes, zeroed macroblock records, zeroed RD counters,
-// cleared token and sub-mode neighbour contexts, cleared serialization
-// sub-contexts, and cleared scratch buffers. The exact active rateProbs
-// pointer and every explicit behavior or test override survive, so a
-// caller can re-run analysis from a clean slate without re-deriving any
-// configuration.
-func (e *encoder) resetAnalysis() {
-	fresh := newEncoder(e.src, e.cfg)
-	fresh.rateProbs = e.rateProbs
-	fresh.forceBPred = e.forceBPred
-	fresh.rdNoPrune = e.rdNoPrune
-	fresh.rdCoeffOptOff = e.rdCoeffOptOff
-	fresh.rdCoeffTrellisOff = e.rdCoeffTrellisOff
-	fresh.rdProbOptOff = e.rdProbOptOff
-	*e = *fresh
 }
 
 // run analyses and reconstructs every macroblock, in the raster order a
@@ -242,21 +223,19 @@ func (e *encoder) run() {
 	}
 }
 
-// runFrame encodes one frame end to end, with the Slice 6A probability
-// refinement layered on top of a plain analysis pass. It first runs the
-// frame exactly as every earlier slice does. Methods below the boundary
-// stop there. Otherwise it derives optimized token probabilities from
-// those final macroblocks exactly once and, when any update survived,
-// re-prices analysis under them: rateProbs is swapped for the frozen
-// table, resetAnalysis clears every mutable state while preserving the
-// active table pointer, and run executes once more against the source.
-// The refinement never loops and never re-derives probabilities.
+// runFrame encodes one frame end to end, with probability refinement layered
+// on top of analysis. Methods below the probability boundary stop after one
+// pass. Method 5 derives an optimized table once from its final macroblocks
+// and freezes it for the header and token writer. Method 6 additionally runs
+// one bounded reconsideration under that table, then re-derives the emitted
+// table from the reconsidered records so serialization never uses stale
+// token statistics.
 //
 // The counters record what happened: probDerivations is 1 -- and
 // probOptimizationDone true -- once the one derivation completed, even
-// when optimizeTokenProbs kept the default table; probReconsiderations
-// is additionally 1 only when a derived table shipped and the frame
-// re-ran under it. Below the boundary nothing is recorded.
+// when optimizeTokenProbs kept the default table. A profitable Method 6 pass
+// records two derivations and one reconsideration. Below Method 5 nothing is
+// recorded.
 func (e *encoder) runFrame() {
 	e.run()
 	if e.cfg.Method < minProbOptMethod {
@@ -269,13 +248,28 @@ func (e *encoder) runFrame() {
 		e.frozenTokenProbs = nil
 		return
 	}
-	e.rateProbs = frozen
-	e.resetAnalysis()
-	e.run()
-	e.probOptimizationDone = true
-	e.probDerivations = 1
 	e.frozenTokenProbs = frozen
-	e.probReconsiderations = 1
+	if e.cfg.Method < minProbReconsiderMethod {
+		return
+	}
+
+	// Build the high-effort pass in fresh state, then adopt it atomically.
+	// Keeping the first pass intact until the second completes avoids a
+	// broad reset primitive and makes the one-pass Method 5 boundary exact.
+	refined := newEncoder(e.src, e.cfg)
+	refined.rateProbs = frozen
+	refined.forceBPred = e.forceBPred
+	refined.rdNoPrune = e.rdNoPrune
+	refined.rdCoeffOptOff = e.rdCoeffOptOff
+	refined.rdCoeffTrellisOff = e.rdCoeffTrellisOff
+	refined.rdProbOptOff = e.rdProbOptOff
+	refined.run()
+	final := refined.optimizeTokenProbs()
+	refined.probOptimizationDone = true
+	refined.probDerivations = 2
+	refined.probReconsiderations = 1
+	refined.frozenTokenProbs = final
+	*e = *refined
 }
 
 // encodeMacroblock chooses the prediction modes, codes the residual, and

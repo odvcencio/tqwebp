@@ -56,7 +56,7 @@ import (
 const maxCoeffCandidates = 49
 
 // spatialDistortionFn prices one candidate block against the source in
-// squared-error units, the units cost.Lambda trades bits against. The
+// squared-error units, the units cost.TrellisLambda trades bits against. The
 // function must be deterministic and pure: it observes only the
 // candidate levels handed to it and returns the same value for the
 // same input on every call. Each surviving candidate is scored exactly

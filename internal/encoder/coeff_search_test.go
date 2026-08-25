@@ -15,6 +15,7 @@ import (
 
 	"m31labs.dev/turboquant/blockdsp"
 
+	"m31labs.dev/tqwebp/internal/corpus"
 	"m31labs.dev/tqwebp/internal/cost"
 	"m31labs.dev/tqwebp/internal/predict"
 	"m31labs.dev/tqwebp/internal/token"
@@ -58,7 +59,8 @@ func TestCoeffSearchDisabledEqualsMethod5(t *testing.T) {
 		{"flat", flatRGBA(33, 17, 200), 50},
 	} {
 		t.Run(spec.name, func(t *testing.T) {
-			m5Data, m5Stats := encodeMethod(t, spec.img, Config{Quality: spec.q, Method: 5})
+			m5Data, m5Stats := encodeMethod(t, spec.img, Config{Quality: spec.q, Method: 5},
+				func(e *encoder) { e.rdProbOptOff = true })
 			m6OffData, m6OffStats := encodeMethod(t, spec.img, Config{Quality: spec.q, Method: 6},
 				func(e *encoder) { e.rdCoeffOptOff = true; e.rdProbOptOff = true })
 			if !bytes.Equal(m5Data, m6OffData) {
@@ -101,11 +103,14 @@ func TestCoeffSearchEnabledChangesBlocks(t *testing.T) {
 			if s.CoeffBlocksChanged > s.CoeffBlocksSearched {
 				t.Fatalf("%d changed blocks exceed %d searched", s.CoeffBlocksChanged, s.CoeffBlocksSearched)
 			}
-			// Every attempted pass codes between 1 and 16 blocks;
-			// committed passes code exactly sixteen.
-			if s.CoeffBlocksSearched > 16*s.BpredAttempts || s.CoeffBlocksSearched < 16*s.DecisionsBPred {
-				t.Fatalf("searched %d outside [%d,%d] attempts=%d decisions=%d",
-					s.CoeffBlocksSearched, 16*s.DecisionsBPred, 16*s.BpredAttempts, s.BpredAttempts, s.DecisionsBPred)
+			// Refinement starts only after an unrefined B_PRED pass wins
+			// admission, then may stop as soon as its partial score cannot
+			// improve that admitted candidate. Consequently it searches at
+			// most sixteen blocks per attempt, with no committed-pass lower
+			// bound.
+			if s.CoeffBlocksSearched > 16*s.BpredAttempts {
+				t.Fatalf("searched %d above the %d-block attempt bound (attempts=%d decisions=%d)",
+					s.CoeffBlocksSearched, 16*s.BpredAttempts, s.BpredAttempts, s.DecisionsBPred)
 			}
 			// The enumeration scores at most maxCoeffCandidates-1
 			// unique vectors per search (see coeff_opt.go).
@@ -125,8 +130,8 @@ func TestCoeffSearchEnabledChangesBlocks(t *testing.T) {
 // lambda times exact BlockCost under the entering context, ties going
 // to the earliest candidate.
 func TestCoeffWinnerIsIndependentArgmin(t *testing.T) {
-	img := bpredMixedRGBA(16, 16, 77)
-	const quality = 75
+	img := bpredMixedRGBA(16, 16, 0)
+	const quality = 35
 
 	enc := newEncoder(yuv.Convert(img), Config{Quality: quality, Method: 6})
 	// Isolation: this slice 5B independent-oracle proof's expected
@@ -216,7 +221,7 @@ func TestCoeffWinnerIsIndependentArgmin(t *testing.T) {
 				}
 			}
 			rate := cost.BlockCost(token.YWithDC, ctx, 0, levels, &token.DefaultProbs)
-			return sse<<8 + int64(rate)*enc.lambda
+			return sse<<8 + int64(rate)*enc.trellisLambda
 		}
 
 		winner := lumaLevels[b]
@@ -378,7 +383,8 @@ func TestCoeffTrellisMethod6Bounds(t *testing.T) {
 		wantChange bool // proven fixture must displace a winner
 	}{
 		{"mixed q75", bpredMixedRGBA(48, 32, 77), 75, false},
-		{"detail q90", bpredDetailRGBA(64, 48, 101), 90, true},
+		{"detail q90", bpredDetailRGBA(64, 48, 101), 90, false},
+		{"panel q75", corpus.Generate(corpus.Spec{Name: "panel", Class: corpus.Screenshot, Width: 1024, Height: 768, Seed: 0x2002}), 75, true},
 	} {
 		t.Run(spec.name, func(t *testing.T) {
 			_, m5 := encodeMethod(t, spec.img, Config{Quality: spec.q, Method: 5})
