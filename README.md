@@ -22,9 +22,9 @@ encoder. What that means, exactly:
 - With the loop filter at level 0, an independent decoder reproduces the
   encoder's own picture byte for byte, on all three planes, at every
   quality tested.
-- At the default effort, tqwebp spends a median 0.538 times the bytes
+- At the default effort, tqwebp spends a median 0.493 times the bytes
   stdlib JPEG quality 82 spends at equal displayed-luma quality.
-- Against libwebp at quality 75, tqwebp spends a median 0.787 times the
+- Against libwebp at quality 75, tqwebp spends a median 0.617 times the
   bytes at interpolated equal displayed-luma quality on the committed
   photo fixtures.
 - Method 5 and 6 can select all ten VP8 4x4 luma predictors through a
@@ -54,7 +54,8 @@ if err := webp.Encode(f, img, &webp.Options{Quality: 80}); err != nil {
 
 The interface mirrors `image/jpeg`. A nil `*Options`, and the zero value,
 both mean quality 75 and method 5. Quality 75 occupies the same displayed-
-luma quality neighborhood as libwebp quality 75 on the photo corpus.
+luma quality neighborhood as stdlib JPEG quality 82 on the photo corpus and
+starts the quality map's progressive high-fidelity shoulder.
 
 For untrusted image sizes or output budgets, `EncodeWithLimits` adds an
 explicit resource boundary without changing the default `Encode` behavior:
@@ -112,19 +113,16 @@ go run ./cmd/tqbench -gates -json out.json   # the full measurements
 | Gate | Bar | Measured | Verdict |
 |---|---|---|---|
 | G1 correctness | every image round-trips, and the decode equals the encoder's own picture | 63 of 63 encodes exact | PASS |
-| G2 rate against stdlib JPEG q82 | median bytes at most 0.90x, no image over 1.10x | median 0.538, worst 0.610 | PASS |
-| G2b quality curve | median gain 2.5 dB from q75 to q90, for at most 2.2x the bytes | gain 4.94 dB, bytes 8.59x | see below |
-| G3 speed | reported, no bar | median 61.4 ms/MP, worst 124.6 ms/MP | reported |
-| G3 rate against libwebp q75 | informative, at most 1.35x | median 0.787x | reported |
+| G2 rate against stdlib JPEG q82 | median bytes at most 0.90x, no image over 1.10x | median 0.493, worst 0.608 | PASS |
+| G2b quality curve | median gain 2.5 dB from q75 to q90, for at most 2.2x the bytes | gain 3.39 dB, bytes 2.14x | PASS |
+| G3 speed | reported, no bar | median 54.4 ms/MP, worst 154.5 ms/MP | reported |
+| G3 rate against libwebp q75 | informative, at most 1.35x | median 0.617x | reported |
 | G4b against deepteams/webp | gated at WP-2 | photos +0.04 dB at the same file size | reported |
 
-G2b's decibel clause passes with margin. Its byte-ratio clause fails, and
-the run reports it rather than gating on it. The reason is the corpus, not
-the encoder: the generated photo images carry per-pixel noise, which puts
-a rate wall between quality 75 and quality 90 that no encoder can cross
-cheaply. libwebp, measured on the same images, needs 7.06 times the bytes
-for its own 4.42 dB. Vendoring the real photo corpus of specification
-section 10.1 re-arms the clause; `-strict` gates it that day.
+The public quality map puts q75 and q90 on the same progressive side of the
+generated photo corpus's rate wall, so both G2b clauses now pass. libwebp,
+measured on the same images with its own public quality map, needs 7.06 times
+the bytes for its 4.42 dB q75-to-q90 gain. `-strict` gates tqwebp's curve.
 
 ## The colour convention
 

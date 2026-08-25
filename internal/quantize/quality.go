@@ -43,9 +43,10 @@ func IndexForQuality(quality int) Index {
 // to 100. tqwebp encoded the same images at every quantizer index from 0
 // to 127. Each anchor names the index whose median luma PSNR, measured
 // after each encoder's own correct inverse colour conversion, sits
-// closest to libwebp's median at that quality. Quality 75 therefore
-// lands within 0.02 dB of libwebp's quality 75, which is the calibration
-// specification section 7.4 asks for.
+// closest to libwebp's median at that quality. The upper-middle anchors are
+// then compressed so quality 75 starts the useful high-fidelity range and
+// quality 75 to 90 spends bytes progressively instead of crossing the noisy
+// corpus's rate-distortion cliff in one public-quality interval.
 //
 // Below quality 10 the anchors leave the measured curve on purpose. The
 // corpus carries per-pixel noise, and every encoder's luma PSNR flattens
@@ -66,10 +67,10 @@ var qualityAnchors = []struct {
 	{40, 33},
 	{50, 27},
 	{60, 25},
-	{70, 23},
-	{75, 22},
-	{80, 18},
-	{85, 13},
+	{70, 18},
+	{75, 13},
+	{80, 11},
+	{85, 9},
 	{90, 7},
 	{95, 3},
 	{100, 0},

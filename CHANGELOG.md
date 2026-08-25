@@ -41,9 +41,13 @@ All notable changes to tqwebp are documented in this file.
 ### Changed
 
 - The default effort is now Method 5. On the committed gate corpus it uses a
-  median 0.538 times the bytes of stdlib JPEG quality 82 at equal displayed-
-  luma quality, a median 0.787 times libwebp's bytes at interpolated equal
-  quality, and 61.4 ms per megapixel median encode time.
+  median 0.493 times the bytes of stdlib JPEG quality 82 at equal displayed-
+  luma quality, a median 0.617 times libwebp's bytes at interpolated equal
+  quality, and 54.4 ms per megapixel median encode time.
+- The upper-middle public quality anchors now place q75 at the useful
+  high-fidelity shoulder. From q75 to q90 the photo corpus gains a median
+  3.39 dB for 2.14 times the bytes, clearing both strict curve gates instead
+  of crossing the corpus's rate wall in one interval.
 - Methods 0 through 4 retain the whole-macroblock path. Method 5 is the normal
   B_PRED/probability tier; Method 6 is the bounded coefficient and repeated-
   refinement tier.
