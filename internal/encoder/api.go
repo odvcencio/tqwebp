@@ -14,11 +14,10 @@ type Config struct {
 	Quality int
 	// Method runs from 0 to 6. Methods 0 to 4 share one effort level:
 	// every macroblock's luma uses a whole-block prediction mode. At
-	// Method 5 and 6 the encoder additionally runs a conservative
-	// detailed-block pass that may code a macroblock's luma as sixteen
-	// 4x4 blocks when its sum-of-squares error is clearly below half
-	// of the whole-block error. The rule prices squared error only,
-	// not bits; it is not a rate-distortion search.
+	// Method 5 and 6 reconstructed-neighbor rate-distortion search may
+	// instead code sixteen B_PRED blocks. Method 5 derives token
+	// probabilities once; Method 6 also refines coefficients and runs one
+	// bounded reconsideration under the derived entropy prices.
 	Method int
 }
 

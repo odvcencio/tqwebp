@@ -13,19 +13,17 @@ import (
 	"m31labs.dev/tqwebp/oracle"
 )
 
-// This file holds the work package WP-2 slice 2B tests: the conservative
-// detailed-block selector behind the Method 5/6 effort boundary. The
-// fixtures are built from two kinds of content:
+// This file holds the B_PRED integration fixtures and tests behind the
+// Method 5/6 effort boundary. The fixtures contain two kinds of content:
 //
 //   - Detail: white noise smoothed by five 3x3 box passes, whose
 //     sample-to-sample correlation dies well before a whole-block
 //     predictor's nearest inputs eight samples out. This is the content
-//     the detailed-block rule must adopt.
+//     reconstructed-neighbor prediction can model well.
 //   - Flat fill: one constant level, which the whole-block modes fit
-//     exactly away from the frame border, so no candidate can halve a
-//     zero error and the rule must keep those macroblocks whole.
+//     exactly away from the frame border, favouring whole-block modes.
 //
-// Mixing the two in one frame pins both sides of the rule in a single
+// Mixing the two in one frame pins both paths in a single
 // encode, and every exact-match check below runs the bytes through
 // golang.org/x/image/vp8, the independent decoder.
 
@@ -33,11 +31,9 @@ import (
 // passes of 3x3 box averaging. That leaves texture whose sample-to-
 // sample correlation a 4x4 predictor exploits -- it reads its twelve
 // immediate neighbours -- while a whole-block predictor, whose nearest
-// inputs sit eight samples out along each border, still finds nothing
-// to copy. On this content the sixteen-block candidate's error lands
-// near a third of the whole-block error, well under the rule's half,
-// at every quality tested. The construction is integer-only over a
-// seeded PCG stream, so it is identical on every platform.
+// inputs sit eight samples out along each border, still finds less to
+// copy. The construction is integer-only over a seeded PCG stream, so
+// it is identical on every platform.
 func bpredDetailRGBA(w, h int, seed uint64) *image.RGBA {
 	r := rand.New(rand.NewPCG(seed, uint64(w)*1000+uint64(h)))
 	samples := make([]uint8, w*h)
@@ -135,33 +131,6 @@ func encodeWithMethod(m image.Image, cfg Config) (*encoder, []byte, int, error) 
 // the whole-block modes a nonzero error to beat.
 func touchesFrameBorder(mbx, mby, mbw, mbh int) bool {
 	return mbx == 0 || mby == 0 || mbx == mbw-1 || mby == mbh-1
-}
-
-// TestBPredClearlyWinsMargin pins the detailed-block rule itself: the
-// candidate wins only when its error is strictly below half of the
-// whole-block error, so equal errors, exact halves, and near-misses all
-// keep the whole block. Strict integer comparison is what makes the rule
-// deterministic.
-func TestBPredClearlyWinsMargin(t *testing.T) {
-	cases := []struct {
-		whole, candidate int64
-		want             bool
-	}{
-		{0, 0, false},
-		{0, 1, false},
-		{100, 50, false}, // exactly half: not clearly better
-		{100, 49, true},
-		{100, 100, false}, // a tie keeps the whole block
-		{7, 3, true},
-		{7, 4, false},
-		{1 << 20, (1 << 19) - 1, true},
-	}
-	for _, c := range cases {
-		if got := bPredClearlyWins(c.whole, c.candidate); got != c.want {
-			t.Errorf("bPredClearlyWins(whole=%d, candidate=%d) = %v, want %v",
-				c.whole, c.candidate, got, c.want)
-		}
-	}
 }
 
 // TestDetailedBlockEffortBoundary pins the effort boundary on detailed

@@ -10,10 +10,9 @@ import (
 // This file is work package WP-2 slice 2A: the B_PRED macroblock coding
 // path, which codes one macroblock's luma as sixteen independent 4x4
 // blocks -- RFC 6386 chapter 12's intra 4x4 predictions -- instead of one
-// 16x16 block behind a Walsh-Hadamard transform. Slice 2A ran it only
-// when a test forced it on; slice 2B also calls it as the tentative
-// candidate of the conservative selector in bpred_select.go, which keeps
-// the result only when the detailed-block rule clearly prefers it.
+// 16x16 block behind a Walsh-Hadamard transform. Production's
+// reconstructed-neighbor search implements the same syntax in rd_select.go;
+// this direct coder remains the focused forced-path reference used by tests.
 //
 // The rules mirror what a decoder does, because the repository's
 // exact-match gate compares the encoder's picture with
@@ -37,9 +36,7 @@ import (
 // reconstruction back before the next block reads its neighbours.
 //
 // It returns the total of the sixteen winning sub-mode sums of squared
-// errors, measured before quantization. The selector in bpred_select.go
-// compares that total with the whole-block error; the forced path of the
-// tests ignores it.
+// errors, measured before quantization.
 func (e *encoder) codeLumaBPred(mbx, mby int, mb *macroblock) int64 {
 	paddedWidth := ((e.src.Width + 15) / 16) * 16
 

@@ -206,15 +206,15 @@ func minInt(a, b int) int {
 	return b
 }
 
-// TestMethodSixShipsPositiveProbabilityUpdates proves the Method 6
+// TestProbabilityBoundaryShipsPositiveUpdates proves the first probability
 // derivation reaches updates that strictly pay: at least one entry ships,
 // every shipped entry matches the independent -log2 ledger, and no
 // shipped entry equals the default it would replace.
-func TestMethodSixShipsPositiveProbabilityUpdates(t *testing.T) {
+func TestProbabilityBoundaryShipsPositiveUpdates(t *testing.T) {
 	enc := analyse(probOptFixture(), Config{Quality: 75, Method: minProbOptMethod})
 	probs := enc.optimizeTokenProbs()
 	if probs == nil {
-		t.Fatal("optimizeTokenProbs returned nil; Method 6 shipped no probability updates")
+		t.Fatal("optimizeTokenProbs returned nil at the probability boundary")
 	}
 
 	counts := measureCounts(enc)
@@ -256,13 +256,13 @@ func TestMethodSixShipsPositiveProbabilityUpdates(t *testing.T) {
 		token.NumPlanes*token.NumBands*token.NumContexts*token.NumProbs)
 }
 
-// TestMethodSixHeaderTableEqualsTokenTableAndDecodes proves three
-// consistencies of one Method 6 encode: the table the header signals
+// TestProbabilityBoundaryHeaderTableEqualsTokenTableAndDecodes proves three
+// consistencies of one boundary encode: the table the header signals
 // (re-parsed independently from the bitstream) equals the derived table,
 // re-coding the token partition against that parsed table reproduces the
 // shipped partition byte for byte, and the whole file still decodes to
 // pixels identical to the encoder's reconstruction.
-func TestMethodSixHeaderTableEqualsTokenTableAndDecodes(t *testing.T) {
+func TestProbabilityBoundaryHeaderTableEqualsTokenTableAndDecodes(t *testing.T) {
 	enc := analyse(probOptFixture(), Config{Quality: 75, Method: minProbOptMethod})
 
 	var fileBuf writerBuffer
@@ -303,12 +303,12 @@ func TestMethodSixHeaderTableEqualsTokenTableAndDecodes(t *testing.T) {
 	}
 }
 
-// TestMethodsBelowSixStayUpdateSilent encodes the fixture at Methods 0
-// through 5 twice -- once normally, once with the probability refinement
+// TestMethodsBelowProbabilityBoundaryStayUpdateSilent encodes every lower
+// method twice -- once normally, once with the probability refinement
 // disabled through the same switch production leaves off -- and requires
 // identical bytes, no derived table, an all-defaults header table, and
 // identical decision counters.
-func TestMethodsBelowSixStayUpdateSilent(t *testing.T) {
+func TestMethodsBelowProbabilityBoundaryStayUpdateSilent(t *testing.T) {
 	img := probOptFixture()
 	for m := 0; m < minProbOptMethod; m++ {
 		t.Run(fmt.Sprintf("method%d", m), func(t *testing.T) {
@@ -345,18 +345,18 @@ func TestMethodsBelowSixStayUpdateSilent(t *testing.T) {
 	}
 }
 
-// TestMethodSixStableAcrossRepeatsAndGOMAXPROCS encodes the fixture at
-// Method 6 in subprocesses pinned to different GOMAXPROCS values and
+// TestProbabilityBoundaryStableAcrossRepeatsAndGOMAXPROCS encodes the fixture
+// at the first probability-enabled method in pinned subprocesses and
 // hashes file bytes, derived table, and decision counters; every hash
 // must match the in-process run.
-func TestMethodSixStableAcrossRepeatsAndGOMAXPROCS(t *testing.T) {
+func TestProbabilityBoundaryStableAcrossRepeatsAndGOMAXPROCS(t *testing.T) {
 	if testing.Short() {
 		t.Skip("subprocess matrix skipped in short mode")
 	}
 	want := probOptStateHash(t)
 	again := probOptStateHash(t)
 	if want != again {
-		t.Fatalf("repeat changed the Method 6 state: %s vs %s", again, want)
+		t.Fatalf("repeat changed probability-boundary state: %s vs %s", again, want)
 	}
 	for _, gmp := range []int{1, 2, 3, 8} {
 		got := runProbOptHashSubprocess(t, gmp)
@@ -370,12 +370,12 @@ func TestMethodSixStableAcrossRepeatsAndGOMAXPROCS(t *testing.T) {
 // it prints "hash <hex>" on stdout and runs only when invoked explicitly.
 func TestProbOptStateHashSubprocess(t *testing.T) {
 	if os.Getenv("TQWEBP_PROBOPT_HASH") == "" {
-		t.Skip("helper for TestMethodSixStableAcrossRepeatsAndGOMAXPROCS")
+		t.Skip("helper for TestProbabilityBoundaryStableAcrossRepeatsAndGOMAXPROCS")
 	}
 	fmt.Printf("hash %s\n", probOptStateHash(t))
 }
 
-// probOptStateHash encodes the fixture at Method 6 and hashes the file
+// probOptStateHash encodes the fixture at the probability boundary and hashes
 // bytes together with the derived table and the decision counters.
 func probOptStateHash(t *testing.T) string {
 	t.Helper()

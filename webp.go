@@ -43,16 +43,14 @@
 //
 // # Effort levels
 //
-// Method runs from 0 to 6. Methods 0 to 4 implement one effort level:
-// every macroblock's luma uses one of the four whole-block prediction
-// modes and one of the four chroma modes. Method 5 and 6 add a
-// conservative detailed-block pass: a macroblock whose luma the whole-
-// block modes fit poorly may be coded as sixteen independent 4x4 blocks
-// instead, but only when the candidate's sum-of-squares error is
-// strictly below half of the whole-block error. That margin is a fixed,
-// bounded proxy chosen so the selector stays conservative without a bit
-// model; the exact rate-distortion mode search and the two-pass
-// probability optimization arrive in later releases.
+// Method runs from 0 to 6. Methods 0 to 4 use the four whole-macroblock
+// luma prediction modes. Method 5, the default, adds reconstructed-neighbor
+// rate-distortion selection of VP8's sixteen-block B_PRED path and derives
+// profitable coefficient-probability updates once from the final records.
+// Method 6 additionally runs bounded coefficient candidate search and
+// trellis refinement, then performs one deterministic mode reconsideration
+// under the first pass's entropy prices. The final probability table is
+// re-derived from the reconsidered records before serialization.
 package webp
 
 import (
@@ -73,21 +71,22 @@ const DefaultQuality = 75
 
 // DefaultMethod is the effort level Encode uses when Options is nil or
 // when its Method field is zero.
-const DefaultMethod = 4
+const DefaultMethod = 5
 
 // Options configures the encoder. A nil *Options, and the zero value,
 // both mean quality DefaultQuality and method DefaultMethod.
 type Options struct {
 	// Quality selects the rate-distortion point, from 1, the smallest
-	// file, to 100, the best picture. Higher quality always spends more
-	// bytes and always keeps more detail. A zero Quality means
-	// DefaultQuality, which makes the zero value of Options useful.
+	// nominal output, to 100, the highest nominal fidelity. Individual
+	// images need not be strictly monotonic at every adjacent setting.
+	// A zero Quality means DefaultQuality, which makes the zero value of
+	// Options useful.
 	Quality int
 	// Method selects the effort level, from 0, the fastest, to 6, the
-	// slowest and best. Methods 0 to 4 share one effort level. At 5
-	// and 6 a conservative detailed-block pass may code selected
-	// macroblocks' luma as sixteen 4x4 blocks; see the Effort levels
-	// section above.
+	// highest effort. Methods 0 to 4 share the whole-macroblock path;
+	// Method 5 adds B_PRED rate-distortion search and probability
+	// optimization; Method 6 adds coefficient refinement and one bounded
+	// entropy-price reconsideration. See the Effort levels section above.
 	Method int
 }
 

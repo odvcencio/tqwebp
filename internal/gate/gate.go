@@ -227,7 +227,7 @@ var DefaultQualities = []int{10, 25, 50, 75, 85, 90, 95}
 
 // DefaultMethod is the effort level measured when Options.Method is zero.
 // Keep it aligned with the public package default.
-const DefaultMethod = 4
+const DefaultMethod = 5
 
 // Run measures every image at every quality and evaluates the gates.
 func Run(images []corpus.Image, opts Options) (*Report, error) {

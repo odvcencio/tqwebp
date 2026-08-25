@@ -14,22 +14,28 @@ the block metrics, and the dead-zone quantizer come from
 
 ## Status
 
-Work package 1 landed: a correct encoder. What that means, exactly:
+The competitive core of work package 2 has landed on top of the correct
+encoder. What that means, exactly:
 
 - Every corpus image encodes, decodes, and keeps its size, at every
   quality.
 - With the loop filter at level 0, an independent decoder reproduces the
   encoder's own picture byte for byte, on all three planes, at every
   quality tested.
-- On the photo class, tqwebp spends 0.74 times the bytes stdlib JPEG
-  quality 82 spends, at the same luma quality.
-- Against libwebp at quality 75, tqwebp spends 1.17 times the bytes for
-  the same luma quality.
+- At the default effort, tqwebp spends a median 0.538 times the bytes
+  stdlib JPEG quality 82 spends at equal displayed-luma quality.
+- Against libwebp at quality 75, tqwebp spends a median 0.787 times the
+  bytes at interpolated equal displayed-luma quality on the committed
+  photo fixtures.
+- Method 5 and 6 can select all ten VP8 4x4 luma predictors through a
+  reconstructed-neighbor rate-distortion search. Method 5 also derives
+  profitable token-probability updates; Method 6 adds coefficient
+  candidate search, trellis refinement, and one bounded entropy-price
+  reconsideration.
 
-What is missing, and lands next: the 4x4 prediction sub-modes, the
-rate-distortion mode search, the two-pass probability optimization, and
-tuned loop filter levels (work package 2). Those tools decide text and
-hard-edge content, where tqwebp trails today.
+What remains in work package 2: segmentation and adaptive quantization,
+tuned loop-filter selection, sharper chroma conversion for saturated edges,
+and partition-zero pressure control at legal maximum dimensions.
 
 ## Using it
 
@@ -47,9 +53,8 @@ if err := webp.Encode(f, img, &webp.Options{Quality: 80}); err != nil {
 ```
 
 The interface mirrors `image/jpeg`. A nil `*Options`, and the zero value,
-both mean quality 75 and method 4. Quality 75 lands within 0.02 dB of
-libwebp's quality 75 on the photo corpus, so the knob means what a caller
-who knows `cwebp` expects it to mean.
+both mean quality 75 and method 5. Quality 75 occupies the same displayed-
+luma quality neighborhood as libwebp quality 75 on the photo corpus.
 
 For untrusted image sizes or output budgets, `EncodeWithLimits` adds an
 explicit resource boundary without changing the default `Encode` behavior:
@@ -72,15 +77,20 @@ the complete RIFF file. The file is serialized before that cap is checked,
 so an output-cap refusal returns `ErrOutputTooLarge` (and
 `ErrLimitExceeded` via `errors.Is`) without writing a partial file.
 
-The `Method` knob now carries one implemented distinction. Methods 0 to 4
-share a single effort level: every macroblock's luma uses one of the four
-whole-block prediction modes. Methods 5 and 6 add a conservative
-detailed-block pass that may code a macroblock's luma as sixteen 4x4
-blocks instead, but only when the candidate's sum-of-squares error is
-strictly below half of what the best whole-block mode left. The rule is
-an error-only proxy with a fixed margin -- it prices no bits, so it is
-not a rate-distortion search -- and methods below 5 never run it, so
-their output stays byte for byte what earlier releases wrote.
+The `Method` knob has three implemented tiers:
+
+- Methods 0 to 4 use one of the four whole-macroblock luma prediction modes.
+- Method 5, the default, adds reconstructed-neighbor rate-distortion
+  selection of the sixteen-block B_PRED path and a single deterministic
+  token-probability derivation from the final records.
+- Method 6 adds bounded coefficient candidate search and trellis refinement,
+  then reconsiders modes once under the first pass's entropy prices. It
+  re-derives the emitted probability table from the final records so header
+  and token statistics cannot go stale.
+
+Methods below 5 never enter the B_PRED search, preserving their earlier
+whole-block behavior. Higher effort is an aggregate rate-distortion tradeoff,
+not a promise that every individual image will be smaller.
 
 Encode refuses an image with a translucent pixel and returns
 `ErrAlphaUnsupported`. Alpha arrives with work package 5, and refusing is
@@ -95,17 +105,18 @@ Run every gate with one command:
 
 ```sh
 go run ./cmd/tqbench -gates                  # verdicts and numbers
+go run ./cmd/tqbench -gates -method 6        # maximum-effort tier
 go run ./cmd/tqbench -gates -json out.json   # the full measurements
 ```
 
 | Gate | Bar | Measured | Verdict |
 |---|---|---|---|
 | G1 correctness | every image round-trips, and the decode equals the encoder's own picture | 63 of 63 encodes exact | PASS |
-| G2 rate against stdlib JPEG q82 | median bytes at most 0.90x, no image over 1.10x | median 0.741, worst 0.760 | PASS |
-| G2b quality curve | median gain 2.5 dB from q75 to q90, for at most 2.2x the bytes | gain 5.00 dB, bytes 9.60x | see below |
-| G3 speed | reported, no bar | 23 ms per megapixel, single thread, no assembly | reported |
-| G3 rate against libwebp q75 | informative, at most 1.35x | median 1.170x | reported |
-| G4b against deepteams/webp | gated at WP-2 | photos -0.14 dB at the same file size | reported |
+| G2 rate against stdlib JPEG q82 | median bytes at most 0.90x, no image over 1.10x | median 0.538, worst 0.610 | PASS |
+| G2b quality curve | median gain 2.5 dB from q75 to q90, for at most 2.2x the bytes | gain 4.94 dB, bytes 8.59x | see below |
+| G3 speed | reported, no bar | median 61.4 ms/MP, worst 124.6 ms/MP | reported |
+| G3 rate against libwebp q75 | informative, at most 1.35x | median 0.787x | reported |
+| G4b against deepteams/webp | gated at WP-2 | photos +0.04 dB at the same file size | reported |
 
 G2b's decibel clause passes with margin. Its byte-ratio clause fails, and
 the run reports it rather than gating on it. The reason is the corpus, not
@@ -206,9 +217,9 @@ Go; zero cgo and zero WebAssembly runtime; deterministic output; every
 release gate decodes each frame through `golang.org/x/image/webp`
 in-process; a drop-in `image/jpeg`-shaped interface.
 
-Not permitted: "first", "only", or "fastest". `deepteams/webp` exists, it
-works, and at the same file size it still leads tqwebp on text and flat
-art.
+Not permitted: "first", "only", or "fastest". `deepteams/webp` exists and
+works; the aggregate comparison now favors tqwebp, while individual flat-art
+fixtures can still favor deepteams materially.
 
 ## License
 

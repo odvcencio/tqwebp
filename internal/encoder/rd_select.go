@@ -1,9 +1,8 @@
 package encoder
 
-// This file is work package WP-2 slice 4: the reconstructed-neighbour
-// rate-distortion luma search that replaces the conservative detailed-
-// block rule of bpred_select.go at Method 5 and above. Methods below the
-// effort boundary never reach this code, so their bytes cannot move.
+// This file is the reconstructed-neighbour rate-distortion luma search used
+// at Method 5 and above. Methods below the effort boundary never reach this
+// code, so their bytes cannot move.
 //
 // For every macroblock the search prices five candidates -- the four
 // whole-block modes and one B_PRED pass -- on the same scale:

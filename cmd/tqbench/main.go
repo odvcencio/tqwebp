@@ -14,7 +14,7 @@
 //
 //	go run ./cmd/tqbench [-root DIR] [-out FILE] [-update]
 //	go run ./cmd/tqbench -gates [-root DIR] [-json FILE] [-encoded-dir DIR]
-//	                     [-method 4] [-qualities 50,75,85,90,95]
+//	                     [-method 5] [-qualities 50,75,85,90,95]
 package main
 
 import (

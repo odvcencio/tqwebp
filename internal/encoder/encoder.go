@@ -55,10 +55,9 @@ type macroblock struct {
 	skip   bool
 	// bpred marks a macroblock whose luma uses the 4x4 sub-mode set
 	// instead of a whole-block mode behind the Walsh-Hadamard transform.
-	// The forced path of work package WP-2 slice 2A sets it for every
-	// macroblock; production sets it only at Method 5 or above, where
-	// the conservative detailed-block rule of bpred_select.go adopts
-	// the sixteen-block candidate.
+	// The forced reference path sets it for every macroblock; production
+	// sets it only at Method 5 or above when rd_select.go's rate-distortion
+	// search adopts the sixteen-block candidate.
 	bpred bool
 	// subModes holds the sixteen raster-ordered 4x4 luma decisions of a
 	// B_PRED macroblock.
@@ -86,8 +85,8 @@ type encoder struct {
 	// encoder's own reconstruction, which the exact-match test needs.
 	filterLevel int
 
-	// rateProbs is the immutable token probability table used by Method 6
-	// RD and refinement pricing. It is read-only throughout a frame; the
+	// rateProbs is the immutable token probability table used by RD and
+	// coefficient-refinement pricing. It is read-only throughout a pass; the
 	// default value is the standard VP8 coefficient probability table, so
 	// behavior matches pricing directly against token.DefaultProbs.
 	rateProbs *token.Probs
@@ -95,7 +94,7 @@ type encoder struct {
 	// forceBPred makes every macroblock take the B_PRED luma path of
 	// work package WP-2 slice 2A, bypassing selection. It exists so
 	// tests can drive the coding path directly; production encodes go
-	// through the Method 5/6 selector of bpred_select.go instead, and
+	// through the Method 5/6 search in rd_select.go instead, and
 	// methods below the boundary never leave the whole-block path.
 	forceBPred bool
 
@@ -138,8 +137,7 @@ type encoder struct {
 
 	// rdCoeffOptOff disables the slice 5B coefficient-candidate
 	// refinement when a test sets it. Production leaves it false; the
-	// equivalence test proves a Method 6 encode with the search off
-	// writes exactly a Method 5 encode's bytes and counters.
+	// equivalence test isolates this layer from Method 5's retained levels.
 	rdCoeffOptOff bool
 
 	// rdCoeffTrellisOff disables only the slice 5C trellis layer of
@@ -148,8 +146,8 @@ type encoder struct {
 	// it to isolate the two layers' contributions.
 	rdCoeffTrellisOff bool
 
-	// rdProbOptOff disables the Slice 6A token-probability refinement,
-	// which production runs at Method 6 and above. Tests set it to
+	// rdProbOptOff disables token-probability refinement, which production
+	// runs at Method 5 and above. Tests set it to
 	// isolate that layer's contribution, exactly as rdCoeffOptOff and
 	// rdCoeffTrellisOff do for theirs.
 	rdProbOptOff bool
@@ -158,14 +156,13 @@ type encoder struct {
 	// derived for serialization, or nil when no derivation shipped.
 	frozenTokenProbs *token.Probs
 
-	// probOptimizationDone records whether runFrame completed its
-	// one probability derivation, even when it kept the default
-	// table and nothing shipped.
+	// probOptimizationDone records whether runFrame completed probability
+	// derivation, even when it kept the default table and nothing shipped.
 	probOptimizationDone bool
 
 	// probDerivations counts how many times runFrame derived token
-	// probabilities for this frame's final macroblocks; it is 1
-	// once that derivation completed.
+	// probabilities; it is one at Method 5 and two after a profitable
+	// Method 6 reconsideration.
 	probDerivations int
 
 	// probReconsiderations counts the bounded high-effort analyses run
@@ -313,8 +310,8 @@ func (e *encoder) encodeMacroblock(mbx, mby int) {
 
 // chooseLumaMode picks the whole-block luma mode with the smallest sum of
 // squared errors against the source, leaves its predictor in bestY, and
-// returns that smallest sum. bpred_select.go's detailed-block rule uses
-// it as the score the sixteen-block candidate must clearly beat.
+// returns that smallest sum. Methods below the RD boundary use this path
+// directly; the higher-effort search evaluates whole modes independently.
 func (e *encoder) chooseLumaMode(mbx, mby int, mb *macroblock) int64 {
 	nb := e.neighbors(&e.nbY, e.rec.Y, e.rec.YStride, mbx*16, mby*16, 16, mbx > 0, mby > 0)
 	src := e.src.Y[(mby*16)*e.src.YStride+mbx*16:]
@@ -612,10 +609,10 @@ func (e *encoder) writeFile(w io.Writer) error {
 func (e *encoder) frameBytes() ([]byte, error) {
 	skipProb := e.skipProbability()
 
-	// Slice 6A: at Method 6 the token probabilities are measured from
+	// At Method 5 and above token probabilities are measured from
 	// the final macroblocks and only strictly-profitable updates ship.
-	// One derivation feeds both the header and the partition, so the two
-	// cannot disagree. Methods below the boundary, and Method 6 encodes
+	// One frozen table feeds both the header and the partition, so the two
+	// cannot disagree. Methods below the boundary, and encodes
 	// where nothing wins, keep the default table.
 	//
 	// Production's runFrame freezes the derived table in frozenTokenProbs

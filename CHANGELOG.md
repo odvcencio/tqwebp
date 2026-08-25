@@ -12,30 +12,41 @@ All notable changes to tqwebp are documented in this file.
   return `ErrInvalidLimits`. Dimension and pixel caps are checked before
   pixel access or plane allocation, and an output cap is checked before any
   caller-visible write (`ErrOutputTooLarge` / `ErrLimitExceeded`). The
-  existing `Encode` entry point and its output remain unchanged.
+  existing `Encode` entry point remains available.
 
-- `internal/cost`: the exact rate primitives the coming
-  reconstructed-neighbour search will consume. Q8 fixed-point boolean
+- `internal/cost`: the rate primitives the reconstructed-neighbour search
+  consumes. Q8 fixed-point boolean
   decision costs cover every codable probability in both branches; on
   top of them sit key-frame luma and chroma mode trees, contextual
   B_PRED sub-mode trees priced through the same tree path the writer
   codes, skip decisions, segment-id tree costs, coefficient tokens with
   their magnitude categories and extra bits, probability-update
-  decisions, partition-zero byte accounting, and an integer-only lambda
-  derived from the quality knob. Nothing in the production encode path
-  consumes these yet, so every encoded file stays byte for byte; a
-  full-frame replay parser proves the model prices the emitted syntax
-  decision for decision at both effort paths.
+  decisions, partition-zero byte accounting, and separate integer-only
+  mode-selection and coefficient-trellis lambdas derived from the quality
+  knob. A full-frame replay parser proves the model prices the emitted
+  syntax decision for decision, including shipped probability updates.
 
-- `internal/encoder`: a conservative detailed-block selector for the
-  B_PRED luma path, available only at `Method` 5 and 6. A macroblock
-  whose whole-block prediction fits poorly may be coded as sixteen
-  independent 4x4 blocks, but only when the candidate's sum-of-squares
-  error is strictly below half of the whole-block error; otherwise the
-  whole-block record and reconstruction stand unchanged. The rule prices
-  squared error only -- it is not a rate-distortion search -- and
-  methods below 5 never run it, so their output is byte-identical to the
-  previous release.
+- `internal/encoder`: reconstructed-neighbor rate-distortion selection of
+  the B_PRED luma path at `Method` 5 and 6, with deterministic pruning,
+  contextual sub-mode syntax, exact coefficient-token pricing, and
+  canonical tie-breaking. Method 6 refines an admitted B_PRED candidate's
+  coefficients only when the complete mode objective improves, preventing
+  trellis-scaled coefficients from displacing a higher-quality macroblock
+  mode.
+- Deterministic coefficient-probability optimization at Method 5 and 6.
+  Method 5 freezes one table from its final records. Method 6 runs one
+  bounded reconsideration under first-pass prices and re-derives the table
+  from the reconsidered records before writing it.
+
+### Changed
+
+- The default effort is now Method 5. On the committed gate corpus it uses a
+  median 0.538 times the bytes of stdlib JPEG quality 82 at equal displayed-
+  luma quality, a median 0.787 times libwebp's bytes at interpolated equal
+  quality, and 61.4 ms per megapixel median encode time.
+- Methods 0 through 4 retain the whole-macroblock path. Method 5 is the normal
+  B_PRED/probability tier; Method 6 is the bounded coefficient and repeated-
+  refinement tier.
 
 ## Unreleased: work package 1 — a correct encoder
 
