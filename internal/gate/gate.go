@@ -312,6 +312,9 @@ func measure(img corpus.Image, quality, method int) (Point, []byte, error) {
 		return Point{}, nil, err
 	}
 	src := yuv.Convert(img.Img)
+	if method >= 5 {
+		src = yuv.ConvertSharp(img.Img, quality >= 85)
+	}
 	coded, err := oracle.MeasurePlanePSNR(src.YCbCr(), planes)
 	if err != nil {
 		return Point{}, nil, err

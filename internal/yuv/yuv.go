@@ -147,9 +147,23 @@ func clamp8(v int32) uint8 {
 // alpha channel; callers reject non-opaque images before they call it
 // (see IsOpaque).
 func Convert(m image.Image) *Planes {
+	return convert(m, false, false)
+}
+
+// ConvertSharp converts m with inverse-aware chroma selection on uniform and
+// optionally high-contrast 2x2 boxes. It is the higher-effort input path used
+// by the default encoder methods; ordinary low-contrast boxes retain Convert's
+// fast coefficients exactly. hardEdges should be enabled only where the
+// quantizer is fine enough to preserve their extended luma values.
+func ConvertSharp(m image.Image, hardEdges bool) *Planes {
+	return convert(m, true, hardEdges)
+}
+
+func convert(m image.Image, sharp, hardEdges bool) *Planes {
 	b := m.Bounds()
 	p := NewPlanes(b.Dx(), b.Dy())
 	src := newSampler(m)
+	var sharpCache map[sharpBoxKey]sharpBox
 
 	// One pass over the padded picture as 2x2 boxes. Each box samples
 	// its four padded coordinates once, writes their four luma values,
@@ -161,22 +175,34 @@ func Convert(m image.Image) *Planes {
 		yrow2 := p.Y[(2*cy+1)*p.YStride:]
 		for cx := 0; cx < p.CStride; cx++ {
 			var sr, sg, sb int32
+			var box [4]sharpRGB
 			for dy := 0; dy < 2; dy++ {
 				for dx := 0; dx < 2; dx++ {
 					r, g, bb := src.at(2*cx+dx, 2*cy+dy)
+					y := RGBToY(r, g, bb)
+					box[2*dy+dx] = sharpRGB{r: r, g: g, b: bb, y: y}
 					sr += int32(r)
 					sg += int32(g)
 					sb += int32(bb)
 					if dy == 0 {
-						yrow[2*cx+dx] = RGBToY(r, g, bb)
+						yrow[2*cx+dx] = y
 					} else {
-						yrow2[2*cx+dx] = RGBToY(r, g, bb)
+						yrow2[2*cx+dx] = y
 					}
 				}
 			}
 			i := cy*p.CStride + cx
 			p.U[i] = boxToU(sr, sg, sb)
 			p.V[i] = boxToV(sr, sg, sb)
+			if sharp && sharpEligible(box, hardEdges) {
+				if sharpCache == nil {
+					sharpCache = make(map[sharpBoxKey]sharpBox)
+				}
+				optimized := sharpenBox(box, p.U[i], p.V[i], sharpCache)
+				p.U[i], p.V[i] = optimized.u, optimized.v
+				yrow[2*cx+0], yrow[2*cx+1] = optimized.y[0], optimized.y[1]
+				yrow2[2*cx+0], yrow2[2*cx+1] = optimized.y[2], optimized.y[3]
+			}
 		}
 	}
 	return p

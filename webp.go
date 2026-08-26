@@ -44,13 +44,15 @@
 // # Effort levels
 //
 // Method runs from 0 to 6. Methods 0 to 4 use the four whole-macroblock
-// luma prediction modes. Method 5, the default, adds reconstructed-neighbor
-// rate-distortion selection of VP8's sixteen-block B_PRED path and derives
-// profitable coefficient-probability updates once from the final records.
-// Method 6 additionally runs bounded coefficient candidate search and
-// trellis refinement, then performs one deterministic mode reconsideration
-// under the first pass's entropy prices. The final probability table is
-// re-derived from the reconsidered records before serialization.
+// luma prediction modes. Method 5, the default, adds inverse-aware sharp YUV
+// conversion (including extended hard-edge refinement at quality 85 and
+// above), reconstructed-neighbor rate-distortion selection of VP8's
+// sixteen-block B_PRED path, and profitable coefficient-probability updates
+// derived once from the final records. Method 6 additionally runs bounded
+// coefficient candidate search and trellis refinement, then performs one
+// deterministic mode reconsideration under the first pass's entropy prices.
+// The final probability table is re-derived from the reconsidered records
+// before serialization.
 package webp
 
 import (
@@ -84,9 +86,10 @@ type Options struct {
 	Quality int
 	// Method selects the effort level, from 0, the fastest, to 6, the
 	// highest effort. Methods 0 to 4 share the whole-macroblock path;
-	// Method 5 adds B_PRED rate-distortion search and probability
-	// optimization; Method 6 adds coefficient refinement and one bounded
-	// entropy-price reconsideration. See the Effort levels section above.
+	// Method 5 adds sharp YUV conversion, B_PRED rate-distortion search, and
+	// probability optimization; Method 6 adds coefficient refinement and one
+	// bounded entropy-price reconsideration. See the Effort levels section
+	// above.
 	Method int
 }
 

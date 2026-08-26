@@ -28,14 +28,15 @@ encoder. What that means, exactly:
   bytes at interpolated equal displayed-luma quality on the committed
   photo fixtures.
 - Method 5 and 6 can select all ten VP8 4x4 luma predictors through a
-  reconstructed-neighbor rate-distortion search. Method 5 also derives
-  profitable token-probability updates; Method 6 adds coefficient
-  candidate search, trellis refinement, and one bounded entropy-price
-  reconsideration.
+  reconstructed-neighbor rate-distortion search and use inverse-aware sharp
+  YUV conversion for flat colours and, at quality 85 and above, saturated
+  edges. Method 5 also derives profitable token-probability updates; Method 6
+  adds coefficient candidate search, trellis refinement, and one bounded
+  entropy-price reconsideration.
 
 What remains in work package 2: segmentation and adaptive quantization,
-tuned loop-filter selection, sharper chroma conversion for saturated edges,
-and partition-zero pressure control at legal maximum dimensions.
+tuned loop-filter selection, and partition-zero pressure control at legal
+maximum dimensions.
 
 ## Using it
 
