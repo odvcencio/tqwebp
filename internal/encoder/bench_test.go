@@ -36,10 +36,17 @@ func BenchmarkEncodeScreenshot(b *testing.B) {
 	}
 }
 
-// BenchmarkEncodeCorpusPhoto encodes the committed corpus photograph, so
-// the benchmark reading and the gate reading measure the same picture.
+// BenchmarkEncodeCorpusPhoto encodes the committed corpus photograph on the
+// fast whole-macroblock tier, preserving the original benchmark name for
+// continuity.
 func BenchmarkEncodeCorpusPhoto(b *testing.B) {
 	benchmarkEncodeCorpusPhoto(b, 4)
+}
+
+// BenchmarkEncodeCorpusPhotoMethod5 measures the public default: B_PRED
+// rate-distortion search plus one token-probability derivation.
+func BenchmarkEncodeCorpusPhotoMethod5(b *testing.B) {
+	benchmarkEncodeCorpusPhoto(b, 5)
 }
 
 // BenchmarkEncodeCorpusPhotoMethod6 tracks the production-quality effort
@@ -47,6 +54,21 @@ func BenchmarkEncodeCorpusPhoto(b *testing.B) {
 // default path is tuned.
 func BenchmarkEncodeCorpusPhotoMethod6(b *testing.B) {
 	benchmarkEncodeCorpusPhoto(b, 6)
+}
+
+// BenchmarkEncodeSmallPhotoMethod5 keeps the table-setup cutoff honest for
+// thumbnail-sized inputs.
+func BenchmarkEncodeSmallPhotoMethod5(b *testing.B) {
+	img := corpus.Generate(corpus.Spec{Name: "b", Class: corpus.Photo, Width: 64, Height: 64, Seed: 79})
+	cfg := Config{Quality: 75, Method: 5}
+	b.SetBytes(64 * 64)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		var buf byteWriter
+		if err := Encode(&buf, img, cfg); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
 
 func benchmarkEncodeCorpusPhoto(b *testing.B, method int) {

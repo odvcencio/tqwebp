@@ -440,7 +440,7 @@ func (e *encoder) rdEvalWhole(mbx, mby int, m predict.Mode, src []uint8, tok *rd
 
 	var sse int64
 	for b := 0; b < 16; b++ {
-		levels := quantizeBlock(&coeffs[b], e.q.Y1)
+		levels := e.qY1.quantizeBlock(&coeffs[b])
 		// Position 0 belongs to the Walsh-Hadamard block, so this
 		// block never codes it.
 		levels[0] = 0
@@ -572,7 +572,7 @@ func (w *rdBPredWalk) codeBlock(bx, by, b int, sub predict.SubMode, nb *predict.
 		}
 	}
 	coeff := blockdsp.FDCT4x4(&residual)
-	q := quantizeBlock(&coeff, e.q.Y1)
+	q := e.qY1.quantizeBlock(&coeff)
 	*levels = toScanOrder(&q)
 
 	// Entering token context, computed exactly as it always was.

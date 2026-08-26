@@ -75,6 +75,11 @@ type encoder struct {
 	src *yuv.Planes
 	rec *yuv.Planes
 	q   quantize.Quantizer
+	// The RD search quantizes the same coefficient factors millions of times.
+	// These frame-local tables replace the runtime integer divisions with
+	// exact signed-coefficient lookups.
+	qY1 blockQuantizer
+	qUV blockQuantizer
 	mbw int
 	mbh int
 	mbs []macroblock
@@ -192,7 +197,7 @@ type neighborBuf struct {
 
 func newEncoder(src *yuv.Planes, cfg Config) *encoder {
 	q := quantize.New(quantize.IndexForQuality(cfg.Quality))
-	return &encoder{
+	e := &encoder{
 		cfg:           cfg,
 		src:           src,
 		rec:           yuv.NewPlanes(src.Width, src.Height),
@@ -207,6 +212,10 @@ func newEncoder(src *yuv.Planes, cfg Config) *encoder {
 		rdTokenAbove:  make([]mbContext, src.MBW),
 		rdSubAbove:    make([][4]predict.SubMode, src.MBW),
 	}
+	buildQuantizeTables := src.Width*src.Height >= minQuantizeTablePixels
+	e.qY1.init(q.Y1, buildQuantizeTables)
+	e.qUV.init(q.UV, buildQuantizeTables)
+	return e
 }
 
 // run analyses and reconstructs every macroblock, in the raster order a
@@ -388,7 +397,7 @@ func (e *encoder) codeLuma(mbx, mby int, mb *macroblock) {
 	reconDC := blockdsp.IWHT4x4(&y2Dequant)
 
 	for b := 0; b < 16; b++ {
-		levels := quantizeBlock(&coeffs[b], e.q.Y1)
+		levels := e.qY1.quantizeBlock(&coeffs[b])
 		// Position 0 belongs to the Walsh-Hadamard block, so this block
 		// never codes it.
 		levels[0] = 0
@@ -425,7 +434,7 @@ func (e *encoder) codePlane8(src, rec []uint8, pred []uint8, mbx, mby int, mb *m
 			}
 		}
 		coeff := blockdsp.FDCT4x4(&residual)
-		levels := quantizeBlock(&coeff, e.q.UV)
+		levels := e.qUV.quantizeBlock(&coeff)
 		mb.levels[base+b] = toScanOrder(&levels)
 		mb.nz[base+b] = anyNonZero(&levels, 0)
 
@@ -494,34 +503,100 @@ func (e *encoder) neighbors(buf *neighborBuf, plane []uint8, stride, x0, y0, siz
 	return &buf.nb
 }
 
-// quantizeBlock applies the rounding bias and then the dead-zone
-// quantizer of blockdsp. It also clamps every level into the range the
-// token tree can carry.
+// quantizeBlock applies the rounding bias, dead-zone quantization, and token
+// clamp in one pass. The int16 conversion after adding the bias is deliberate:
+// it preserves the old two-stage path's wrap semantics for every possible
+// transform coefficient, including values outside the encoder's normal FDCT
+// range.
 func quantizeBlock(coeff *[16]int16, f quantize.Factors) [16]int16 {
-	biased := *coeff
 	dcBias := int32(f.DC) * biasNumerator / biasDenominator
 	acBias := int32(f.AC) * biasNumerator / biasDenominator
-	for i := range biased {
-		bias := acBias
-		if i == 0 {
-			bias = dcBias
-		}
-		v := int32(biased[i])
-		switch {
-		case v > 0:
-			v += bias
-		case v < 0:
-			v -= bias
-		}
-		biased[i] = int16(v)
+	var levels [16]int16
+	levels[0] = quantizeLevel(coeff[0], f.DC, dcBias)
+	for i := 1; i < len(levels); i++ {
+		levels[i] = quantizeLevel(coeff[i], f.AC, acBias)
 	}
+	return levels
+}
 
-	levels := blockdsp.QuantizeBlock(&biased, f.DC, f.AC)
-	for i, v := range levels {
-		if v > token.MaxLevel {
-			levels[i] = token.MaxLevel
-		} else if v < -token.MaxLevel {
-			levels[i] = -token.MaxLevel
+func quantizeLevel(coeff, factor int16, bias int32) int16 {
+	v := int32(coeff)
+	switch {
+	case v > 0:
+		v += bias
+	case v < 0:
+		v -= bias
+	}
+	level := int16(v) / factor
+	if level > token.MaxLevel {
+		return token.MaxLevel
+	}
+	if level < -token.MaxLevel {
+		return -token.MaxLevel
+	}
+	return level
+}
+
+// FDCT coefficients produced from uint8 sample residuals fit comfortably in
+// this interval (the maximum DC magnitude is 8*255 == 2040). Keeping a wider
+// power-of-two margin covers the complete normal transform domain while
+// making table setup cheap enough for thumbnails.
+const (
+	quantizeTableMin  = -4096
+	quantizeTableSize = 8192
+)
+
+// Below this size, the bounded RD search does not perform enough divisions
+// to repay table construction. The fused scalar path remains exact and avoids
+// charging thumbnails a fixed setup cost.
+const minQuantizeTablePixels = 128 * 128
+
+// blockQuantizer uses lookups for normal FDCT coefficients and the exact
+// scalar operation for every other int16 value. Y2 is intentionally left on
+// the scalar path: it occurs once per whole-macroblock candidate rather than
+// sixteen times, and its Walsh-Hadamard range would make setup dominate small
+// images.
+type blockQuantizer struct {
+	factors quantize.Factors
+	dcBias  int32
+	acBias  int32
+	dc      *[quantizeTableSize]int16
+	ac      *[quantizeTableSize]int16
+}
+
+func (q *blockQuantizer) init(f quantize.Factors, build bool) {
+	q.factors = f
+	q.dcBias = int32(f.DC) * biasNumerator / biasDenominator
+	q.acBias = int32(f.AC) * biasNumerator / biasDenominator
+	if !build {
+		return
+	}
+	q.dc = new([quantizeTableSize]int16)
+	q.ac = new([quantizeTableSize]int16)
+	for i := range q.dc {
+		coeff := int16(i + quantizeTableMin)
+		q.dc[i] = quantizeLevel(coeff, f.DC, q.dcBias)
+		q.ac[i] = quantizeLevel(coeff, f.AC, q.acBias)
+	}
+}
+
+func (q *blockQuantizer) quantizeBlock(coeff *[16]int16) [16]int16 {
+	if q.dc == nil {
+		return quantizeBlock(coeff, q.factors)
+	}
+	var levels [16]int16
+	dcIndex := int(coeff[0]) - quantizeTableMin
+	if uint(dcIndex) < quantizeTableSize {
+		levels[0] = q.dc[dcIndex]
+	} else {
+		levels[0] = quantizeLevel(coeff[0], q.factors.DC, q.dcBias)
+	}
+	for i := 1; i < len(levels); i++ {
+		acIndex := int(coeff[i]) - quantizeTableMin
+		if uint(acIndex) < quantizeTableSize {
+			levels[i] = q.ac[acIndex]
+		} else {
+			levels[i] = quantizeLevel(coeff[i], q.factors.AC, q.acBias)
 		}
 	}
 	return levels

@@ -74,7 +74,7 @@ func (e *encoder) codeLumaBPred(mbx, mby int, mb *macroblock) int64 {
 			}
 		}
 		coeff := blockdsp.FDCT4x4(&residual)
-		levels := quantizeBlock(&coeff, e.q.Y1)
+		levels := e.qY1.quantizeBlock(&coeff)
 		mb.levels[blockLuma+b] = toScanOrder(&levels)
 		mb.nz[blockLuma+b] = anyNonZero(&levels, 0)
 
