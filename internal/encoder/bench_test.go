@@ -86,6 +86,8 @@ func benchmarkEncodeCorpusPhoto(b *testing.B, method int) {
 	}
 	cfg := Config{Quality: 75, Method: method}
 	b.SetBytes(int64(px))
+	b.ReportAllocs()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var buf byteWriter
 		if err := Encode(&buf, img, cfg); err != nil {

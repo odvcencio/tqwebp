@@ -161,8 +161,9 @@ func TestBlockCostExhaustiveSingleCoefficients(t *testing.T) {
 						var levels [16]int16
 						levels[pos] = int16(mag)
 						got := BlockCost(plane, ctx, first, &levels, &token.DefaultProbs)
+						gotBoth, nonZero := BlockCostAndNonZero(plane, ctx, first, &levels, &token.DefaultProbs)
 						want := refBlockCost(tab, plane, ctx, first, &levels, &token.DefaultProbs)
-						if got != want {
+						if got != want || gotBoth != want || !nonZero {
 							t.Fatalf("single coeff plane=%d ctx=%d first=%d pos=%d mag=%d: %d, want %d",
 								plane, ctx, first, pos, mag, got, want)
 						}
@@ -219,8 +220,13 @@ func TestBlockCostRandomMultiTokenBlocks(t *testing.T) {
 		plane := r.IntN(token.NumPlanes)
 		ctx := r.IntN(3)
 		got := BlockCost(plane, ctx, first, &levels, &token.DefaultProbs)
+		gotBoth, nonZero := BlockCostAndNonZero(plane, ctx, first, &levels, &token.DefaultProbs)
 		want := refBlockCost(tab, plane, ctx, first, &levels, &token.DefaultProbs)
-		if got != want {
+		wantNonZero := false
+		for i := 0; i < len(levels); i++ {
+			wantNonZero = wantNonZero || levels[i] != 0
+		}
+		if got != want || gotBoth != want || nonZero != wantNonZero {
 			t.Fatalf("iter %d plane=%d ctx=%d first=%d levels=%v: %d, want %d",
 				iter, plane, ctx, first, levels, got, want)
 		}

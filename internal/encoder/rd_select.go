@@ -488,16 +488,18 @@ func (e *encoder) rdEvalWhole(mbx, mby int, m predict.Mode, src []uint8, tok *rd
 func (e *encoder) rdPriceWholeTokens(y2Levels *[16]int16, luma *[16][16]int16, tok *rdTokenView) (cost.Cost, bool) {
 	probs := e.rateProbs
 	tokenRate := cost.Cost(0)
-	tokenRate += cost.BlockCost(token.Y2, int(tok.leftY2+tok.upY2), 0, y2Levels, probs)
-	lumaEmpty := !anyNonZeroScan(y2Levels)
+	y2Cost, y2NonZero := cost.BlockCostAndNonZero(token.Y2, int(tok.leftY2+tok.upY2), 0, y2Levels, probs)
+	tokenRate += y2Cost
+	lumaEmpty := !y2NonZero
 	up := tok.upLuma
 	for y := 0; y < 4; y++ {
 		nz := tok.leftLuma[y]
 		for x := 0; x < 4; x++ {
 			ctx := int(nz + up[x])
 			block := &luma[4*y+x]
-			tokenRate += cost.BlockCost(token.YAfterY2, ctx, 1, block, probs)
-			nz = btou(anyNonZeroScan(block))
+			blockCost, nonZero := cost.BlockCostAndNonZero(token.YAfterY2, ctx, 1, block, probs)
+			tokenRate += blockCost
+			nz = btou(nonZero)
 			up[x] = nz
 			if nz != 0 {
 				lumaEmpty = false
@@ -598,7 +600,7 @@ func (w *rdBPredWalk) codeBlock(bx, by, b int, sub predict.SubMode, nb *predict.
 
 	// Exact token cost in the YWithDC plane, threaded like the luma
 	// rows of writeTokens but starting at coefficient 0.
-	tokenCost := cost.BlockCost(token.YWithDC, ctx, 0, levels, e.rateProbs)
+	tokenCost, nonZero := cost.BlockCostAndNonZero(token.YWithDC, ctx, 0, levels, e.rateProbs)
 	w.tokenRate += tokenCost
 
 	dequant := blockdsp.DequantizeBlock(&q, e.q.Y1.DC, e.q.Y1.AC)
@@ -616,7 +618,7 @@ func (w *rdBPredWalk) codeBlock(bx, by, b int, sub predict.SubMode, nb *predict.
 		}
 	}
 
-	nz := btou(anyNonZeroScan(levels))
+	nz := btou(nonZero)
 	if nz != 0 {
 		w.anyNonZero = true
 		if w.skipPossible {

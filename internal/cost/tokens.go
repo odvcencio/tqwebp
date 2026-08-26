@@ -17,6 +17,15 @@ import "m31labs.dev/tqwebp/internal/token"
 // start position, and on any level beyond token.MaxLevel, mirroring the
 // writer's own refusals.
 func BlockCost(plane, ctx, first int, levels *[16]int16, probs *token.Probs) Cost {
+	c, _ := BlockCostAndNonZero(plane, ctx, first, levels, probs)
+	return c
+}
+
+// BlockCostAndNonZero returns BlockCost's exact rate together with the
+// nonzero flag the same coefficient scan discovers. RD callers need both to
+// thread neighbour contexts; returning the flag avoids immediately scanning
+// the block a second time.
+func BlockCostAndNonZero(plane, ctx, first int, levels *[16]int16, probs *token.Probs) (Cost, bool) {
 	if plane < 0 || plane >= token.NumPlanes {
 		panic("tqwebp/cost: unknown coefficient plane")
 	}
@@ -34,6 +43,19 @@ func BlockCost(plane, ctx, first int, levels *[16]int16, probs *token.Probs) Cos
 			break
 		}
 	}
+	nonZero := last >= 0
+	// Encoder context records describe the whole coefficient vector even
+	// when coding starts after DC. Normally those skipped positions are zero,
+	// but preserve BlockCost callers' established full-vector semantics for
+	// hand-built records and invariant tests as well.
+	if !nonZero {
+		for i := 0; i < first; i++ {
+			if levels[i] != 0 {
+				nonZero = true
+				break
+			}
+		}
+	}
 
 	planeProbs := &probs[plane]
 	n := first
@@ -41,7 +63,7 @@ func BlockCost(plane, ctx, first int, levels *[16]int16, probs *token.Probs) Cos
 
 	var c Cost
 	if last < 0 {
-		return c + BitCost(p[0], false)
+		return c + BitCost(p[0], false), nonZero
 	}
 	c += BitCost(p[0], true)
 
@@ -75,16 +97,16 @@ func BlockCost(plane, ctx, first int, levels *[16]int16, probs *token.Probs) Cos
 
 		n++
 		if n == 16 {
-			return c
+			return c, true
 		}
 		p = &planeProbs[token.Bands[n]][nextCtx]
 		if n > last {
 			c += BitCost(p[0], false)
-			return c
+			return c, true
 		}
 		c += BitCost(p[0], true)
 	}
-	return c
+	return c, true
 }
 
 // magnitudeCost prices the magnitude subtree of one coefficient whose
