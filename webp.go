@@ -24,11 +24,33 @@
 // every platform and at every value of GOMAXPROCS. Asset pipelines that
 // hash their output can rely on that.
 //
+// # Alpha
+//
+// Encode keeps a translucent picture's alpha channel, and it decides
+// without a knob. An opaque picture writes the simple container: a RIFF
+// header and a VP8 key frame, byte for byte what every earlier release
+// wrote. A picture with one translucent pixel writes the extended
+// container instead: a VP8X chunk with the alpha flag set, an ALPH chunk
+// that stores the alpha plane one byte per pixel, and then the same key
+// frame.
+//
+// Storing the alpha plane raw costs width times height bytes. A VP8L
+// compressed alpha plane, which the WebP container also allows, costs far
+// less on the flat masks that badges and logos carry. This release does
+// not build one; see the README for what that means for file size today.
+//
+// The colour under a translucent pixel is straight, not premultiplied,
+// which is what the WebP format stores. An *image.RGBA holds
+// premultiplied colour, so Encode divides the alpha back out of it. A
+// pixel of alpha zero in an *image.RGBA carries no colour to recover and
+// encodes as black. An *image.NRGBA holds straight colour already and
+// keeps every sample, alpha zero included.
+//
 // # Scope
 //
-// This release codes opaque images only. Encode returns
-// ErrAlphaUnsupported for an image with a translucent pixel, so no
-// pipeline can lose a mask without noticing.
+// This release codes lossy frames. It writes no lossless VP8L frame, no
+// animation, and no metadata chunk. ErrAlphaUnsupported remains for
+// callers who test it, and Encode no longer returns it.
 //
 // # Resource limits
 //
@@ -64,7 +86,6 @@ import (
 
 	"m31labs.dev/tqwebp/internal/encoder"
 	"m31labs.dev/tqwebp/internal/frame"
-	"m31labs.dev/tqwebp/internal/yuv"
 )
 
 // DefaultQuality is the quality Encode uses when Options is nil or when
@@ -108,9 +129,14 @@ type Limits struct {
 
 // Sentinel errors Encode returns. Callers can test them with errors.Is.
 var (
-	// ErrAlphaUnsupported reports an image with at least one translucent
-	// pixel. This release codes opaque images only, and it refuses rather
-	// than dropping the alpha channel in silence.
+	// ErrAlphaUnsupported is retired. Encode used to return it for an
+	// image with a translucent pixel; it now writes the alpha channel
+	// into an ALPH chunk instead, so no encode returns this error any
+	// more. The variable stays so that code which tests for it still
+	// compiles.
+	//
+	// Deprecated: Encode keeps the alpha channel. Nothing returns this
+	// error.
 	ErrAlphaUnsupported = errors.New("tqwebp: alpha channel is not supported yet")
 
 	// ErrInvalidOptions reports an option value outside its range.
@@ -137,6 +163,10 @@ var (
 // Encode writes m to w in the lossy WebP format. A nil o means the
 // default options.
 //
+// An opaque m writes the simple container. An m with a translucent pixel
+// writes the extended container, which carries the alpha channel; see the
+// Alpha section above.
+//
 // Encode buffers the whole file before it writes, because the container
 // size, the frame tag, and the partition length all precede the data they
 // describe.
@@ -152,9 +182,6 @@ func Encode(w io.Writer, m image.Image, o *Options) error {
 	}
 	if b.Dx() > frame.MaxDimension || b.Dy() > frame.MaxDimension {
 		return ErrTooLarge
-	}
-	if !yuv.IsOpaque(m) {
-		return ErrAlphaUnsupported
 	}
 	return encoder.Encode(w, m, cfg)
 }
@@ -192,10 +219,6 @@ func EncodeWithLimits(w io.Writer, m image.Image, o *Options, limits Limits) err
 	}
 	if width > frame.MaxDimension || height > frame.MaxDimension {
 		return ErrTooLarge
-	}
-
-	if !yuv.IsOpaque(m) {
-		return ErrAlphaUnsupported
 	}
 
 	var encoded bytes.Buffer

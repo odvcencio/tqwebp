@@ -59,14 +59,27 @@ func TestErrors(t *testing.T) {
 		opaque.Pix[i] = 0xff
 	}
 
-	t.Run("alpha", func(t *testing.T) {
+	t.Run("alpha-is-accepted", func(t *testing.T) {
+		// Alpha used to be a refusal. It is a feature now: the encode
+		// succeeds and the file keeps the translucent sample.
 		m := image.NewNRGBA(image.Rect(0, 0, 8, 8))
 		for i := range m.Pix {
 			m.Pix[i] = 0xff
 		}
 		m.Set(3, 3, color.NRGBA{R: 1, G: 2, B: 3, A: 128})
-		if err := Encode(&bytes.Buffer{}, m, nil); err != ErrAlphaUnsupported {
-			t.Errorf("error is %v, want ErrAlphaUnsupported", err)
+		var buf bytes.Buffer
+		if err := Encode(&buf, m, nil); err != nil {
+			t.Fatalf("encode: %v", err)
+		}
+		decoded, err := oracle.DecodeWebPFile(buf.Bytes())
+		if err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if !decoded.HasAlpha() {
+			t.Fatal("the file carries no ALPH chunk")
+		}
+		if got := decoded.AlphaAt(3, 3); got != 128 {
+			t.Errorf("alpha at (3,3) is %d, want 128", got)
 		}
 	})
 
