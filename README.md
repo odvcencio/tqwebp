@@ -82,12 +82,80 @@ an error-only proxy with a fixed margin -- it prices no bits, so it is
 not a rate-distortion search -- and methods below 5 never run it, so
 their output stays byte for byte what earlier releases wrote.
 
-Encode refuses an image with a translucent pixel and returns
-`ErrAlphaUnsupported`. Alpha arrives with work package 5, and refusing is
-the only way a pipeline cannot lose a mask in silence.
+Encode keeps the alpha channel of a translucent image; see the next
+section. `ErrAlphaUnsupported` is retired, and no encode returns it.
 
 Output is deterministic: the same image and the same options always
 produce the same bytes, at every value of GOMAXPROCS.
+
+## Alpha
+
+Encode decides on alpha without a knob:
+
+- An opaque image writes the simple container: a RIFF header and a VP8
+  key frame. The bytes are what every earlier release wrote. A committed
+  table of 135 SHA-256 hashes, over nine corpus images, five qualities,
+  and three methods, pins that promise on every test run.
+- An image with one translucent pixel writes the extended container: a
+  `VP8X` chunk with the alpha flag and the 24-bit canvas fields, an
+  `ALPH` chunk, then the same VP8 key frame.
+
+The `ALPH` chunk uses compression method 0, which stores the alpha plane
+sample for sample, and filtering method 0, which stores each sample as
+it is. Compression method 0 costs one byte per pixel whichever filter
+runs, so no filter can shrink a file today. All four filters — none,
+horizontal, vertical, and gradient — are implemented, and every one of
+them decodes byte for byte through `golang.org/x/image/webp`.
+
+Alpha round-trips exactly. Every alpha test asserts per pixel, not on a
+summary: the plane the decoder returns equals the plane the source
+carried, sample for sample. The colour planes follow the usual lossy
+tolerances.
+
+### Straight colour, not premultiplied
+
+WebP stores straight colour next to alpha. `*image.NRGBA` and
+`*image.NYCbCrA` already hold it. `*image.RGBA` holds premultiplied
+colour, so tqwebp divides the alpha back out, with the arithmetic of
+`color.NRGBAModel`; an exhaustive test walks every legal byte pair and
+proves the two agree. A pixel of alpha zero in an `*image.RGBA` carries
+no colour to recover and encodes as black. An `*image.NRGBA` keeps its
+own stored colour there, because that type never lost it.
+
+### What raw alpha costs, measured
+
+Raw alpha adds width times height bytes. On real translucent assets that
+loses to PNG today, and this section says so with numbers.
+
+The measurement runs over 32 badge assets of a production fantasy
+football site, at quality 80. All 32 decode through
+`golang.org/x/image/webp` with their alpha planes byte exact.
+
+| Set | Count | Size | Median PNG | Median tqwebp | Median ratio |
+|---|---|---|---|---|---|
+| motif badges | 16 | 512x512 | 173915 | 342656 | 1.97x |
+| default badges | 8 | 128x128 | 17974 | 26419 | 1.48x |
+| default badges, large | 8 | 384x384 | 120406 | 198430 | 1.65x |
+
+tqwebp spends 1.5 to 2.0 times what PNG spends. The alpha plane is the
+reason: it is 262144 of those 342656 bytes at 512x512, which is 77 per
+cent of the file. The VP8 key frame alone already beats the PNG.
+
+Compression method 1, which stores the alpha plane as a VP8L stream, is
+the change that moves the number. This release does not build one.
+
+A `compress/flate` run over the same filtered planes measures how much
+room a real entropy coder has. It is a signal, not a promise, because
+VP8L is not flate. Substituting the flate figure for the raw plane gives
+a median 0.82 times PNG on the motif badges, 0.90 times on the small
+default badges, and 0.76 times on the large ones. The gradient filter
+wins on every 384x384 and 512x512 plane; no filter wins on the 128x128
+planes.
+
+These badges carry a dithered alpha channel of about 3 bits of
+zeroth-order entropy per sample, not a clean two-level mask. A flat logo
+compresses much further, so read the ratios above as the hard end of the
+range.
 
 ## Measured gates
 
@@ -154,6 +222,9 @@ content classes plus two correctness edge cases:
 
 - `DecodeWebP` / `WebPPlanesToRGBA`: decode with libwebp's colour
   convention. Every cross-codec measurement goes through it.
+- `DecodeWebPFile`: decode the colour planes and the alpha plane
+  together. Use it to check an `ALPH` chunk sample for sample.
+- `DecodeWebPNRGBA`: the same decode as straight colour with alpha.
 - `MeasurePSNR`: per-channel PSNR after that decode. Use it to compare
   two codecs.
 - `MeasurePlanePSNR`: PSNR in the codec's own plane domain. Use it to ask
@@ -204,11 +275,17 @@ gofmt -l .
 Permitted, because they are true and checked: lossy WebP encoder in pure
 Go; zero cgo and zero WebAssembly runtime; deterministic output; every
 release gate decodes each frame through `golang.org/x/image/webp`
-in-process; a drop-in `image/jpeg`-shaped interface.
+in-process; a drop-in `image/jpeg`-shaped interface; a translucent image
+keeps its alpha channel, and that channel round-trips byte exact.
 
 Not permitted: "first", "only", or "fastest". `deepteams/webp` exists, it
 works, and at the same file size it still leads tqwebp on text and flat
 art.
+
+Not permitted about alpha: any claim that tqwebp beats PNG on a
+translucent asset. It does not, because it stores the alpha plane raw.
+Compression method 1 is the work that changes the claim, and it is not
+built.
 
 ## License
 

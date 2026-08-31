@@ -6,6 +6,38 @@ All notable changes to tqwebp are documented in this file.
 
 ### Added
 
+- Alpha for lossy frames, work package 2 slices 2.1 and 2.2. An image
+  with one translucent pixel now writes the extended container: a `VP8X`
+  chunk with the alpha flag and the 24-bit minus-one canvas fields, an
+  `ALPH` chunk, then the VP8 key frame. The `ALPH` chunk uses
+  compression method 0, which stores the alpha plane one byte per pixel.
+  All four filtering methods — none, horizontal, vertical, gradient —
+  are implemented and each decodes byte for byte through
+  `golang.org/x/image/webp`; the encoder ships filter 0, because
+  compression method 0 costs the same whichever filter runs.
+
+  An opaque image keeps the simple container and its exact bytes. A
+  committed table of 135 SHA-256 hashes, written by the release before
+  alpha, pins that on every test run.
+
+  Colour is straight, never premultiplied, which is what WebP stores. A
+  translucent `*image.RGBA` is un-premultiplied with the arithmetic of
+  `color.NRGBAModel`. A pixel of alpha zero in an `*image.RGBA` encodes
+  as black; an `*image.NRGBA` keeps its own stored colour there.
+
+  Raw alpha costs width times height bytes, so a translucent asset is
+  larger than its PNG today. The README carries the measured table.
+  Compression method 1, a VP8L alpha payload, is the follow-up that
+  changes the number, and it is not built.
+
+- `internal/alpha`: read the straight alpha channel of an image, build
+  the `ALPH` payload, and filter the plane.
+
+- `oracle.DecodeWebPFile` and `oracle.DecodeWebPNRGBA`: decode the
+  colour planes and the alpha plane of an extended WebP file.
+  `DecodeWebPPlanes` and `DecodeWebP` keep their signatures and their
+  results.
+
 - `Limits` and `EncodeWithLimits` at the module root. Applications that
   process untrusted images can cap width, height, visible pixels, and the
   complete RIFF output. Zero means no caller-specified cap; negative limits
@@ -36,6 +68,13 @@ All notable changes to tqwebp are documented in this file.
   squared error only -- it is not a rate-distortion search -- and
   methods below 5 never run it, so their output is byte-identical to the
   previous release.
+
+### Deprecated
+
+- `ErrAlphaUnsupported`. `Encode` used to return it for an image with a
+  translucent pixel. It now writes the alpha channel instead, so no
+  encode returns this error. The variable stays declared, so code that
+  tests for it still compiles.
 
 ## Unreleased: work package 1 — a correct encoder
 
