@@ -214,6 +214,10 @@ type Options struct {
 	// WriteEncoded receives every encoded file when it is not nil, so an
 	// external tool can check the same bytes.
 	WriteEncoded func(name string, quality int, data []byte) error
+	// WriteAlphaCase receives every gate G5 fixture when it is not nil:
+	// the source picture and the WebP file tqwebp wrote for it. An
+	// external decoder, libwebp itself, then checks the same bytes.
+	WriteAlphaCase func(name string, src image.Image, data []byte) error
 }
 
 // LibwebpPoint is one measured libwebp result, read from a fixture.
@@ -272,7 +276,7 @@ func Run(images []corpus.Image, opts Options) (*Report, error) {
 	if err := rep.evaluateG4b(opts); err != nil {
 		return nil, err
 	}
-	rep.evaluateG5(images)
+	rep.evaluateG5(images, opts)
 	return rep, nil
 }
 

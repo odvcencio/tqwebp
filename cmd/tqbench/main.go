@@ -14,13 +14,15 @@
 //
 //	go run ./cmd/tqbench [-root DIR] [-out FILE] [-update]
 //	go run ./cmd/tqbench -gates [-root DIR] [-json FILE] [-encoded-dir DIR]
-//	                     [-qualities 50,75,85,90,95]
+//	                     [-alpha-dir DIR] [-qualities 50,75,85,90,95]
 package main
 
 import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -38,6 +40,7 @@ func main() {
 	gates := flag.Bool("gates", false, "run the release gates instead of the baseline table")
 	jsonOut := flag.String("json", "", "write the gate report as JSON to this path")
 	encodedDir := flag.String("encoded-dir", "", "write every encoded file into this directory, for external checks")
+	alphaDir := flag.String("alpha-dir", "", "write every gate G5 alpha fixture into this directory, as a .webp and its .png source, for tools/libwebp_alpha_check.py")
 	qualities := flag.String("qualities", "10,25,50,75,85,90,95", "comma separated quality settings for the gate run")
 	strict := flag.Bool("strict", false, "also fail the run when gate G2b fails (see the README for why its byte-ratio clause is reported, not gated, on the generated corpus)")
 	flag.Parse()
@@ -48,7 +51,7 @@ func main() {
 	}
 
 	if *gates {
-		runGates(*root, images, *qualities, *jsonOut, *encodedDir, *strict)
+		runGates(*root, images, *qualities, *jsonOut, *encodedDir, *alphaDir, *strict)
 		return
 	}
 
@@ -67,7 +70,7 @@ func main() {
 	fmt.Print(table.String())
 }
 
-func runGates(root string, images []corpus.Image, qualities, jsonPath, encodedDir string, strict bool) {
+func runGates(root string, images []corpus.Image, qualities, jsonPath, encodedDir, alphaDir string, strict bool) {
 	opts := gate.Options{
 		Qualities:      parseQualities(qualities),
 		JPEGQuality:    82,
@@ -83,6 +86,15 @@ func runGates(root string, images []corpus.Image, qualities, jsonPath, encodedDi
 		}
 		opts.WriteEncoded = func(name string, quality int, data []byte) error {
 			return os.WriteFile(filepath.Join(encodedDir, fmt.Sprintf("%s_q%d.webp", name, quality)), data, 0o644)
+		}
+	}
+
+	if alphaDir != "" {
+		if err := os.MkdirAll(alphaDir, 0o755); err != nil {
+			fail(err)
+		}
+		opts.WriteAlphaCase = func(name string, src image.Image, data []byte) error {
+			return writeAlphaFixture(alphaDir, name, src, data)
 		}
 	}
 
@@ -116,6 +128,26 @@ func runGates(root string, images []corpus.Image, qualities, jsonPath, encodedDi
 	if !report.G1.Pass || !report.G2.Pass || !report.G5.Pass || (strict && !report.G2b.Pass) {
 		os.Exit(1)
 	}
+}
+
+// writeAlphaFixture writes one gate G5 case as a pair of files: the
+// WebP tqwebp produced, and the source picture as a lossless PNG.
+// tools/libwebp_alpha_check.py reads the pair and asks libwebp itself
+// whether the alpha plane survived.
+func writeAlphaFixture(dir, name string, src image.Image, data []byte) error {
+	base := strings.ReplaceAll(name, "/", "_")
+	if err := os.WriteFile(filepath.Join(dir, base+".webp"), data, 0o644); err != nil {
+		return err
+	}
+	f, err := os.Create(filepath.Join(dir, base+".png"))
+	if err != nil {
+		return err
+	}
+	if err := png.Encode(f, src); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // readLibwebpFixture reads the optional libwebp measurement fixture that

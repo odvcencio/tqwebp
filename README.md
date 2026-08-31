@@ -112,6 +112,19 @@ summary: the plane the decoder returns equals the plane the source
 carried, sample for sample. The colour planes follow the usual lossy
 tolerances.
 
+Two independent decoders check that claim. `golang.org/x/image/webp`
+checks it on every test run and in gate G5. libwebp itself checks it on
+demand, through Pillow:
+
+```sh
+go run ./cmd/tqbench -gates -alpha-dir /tmp/tqwebp-alpha
+python3 tools/libwebp_alpha_check.py /tmp/tqwebp-alpha
+```
+
+Measured: all 15 gate G5 fixtures are byte exact through libwebp, and
+their colour root-mean-square error under opaque pixels runs from 1.04
+to 4.90 at quality 75.
+
 ### Straight colour, not premultiplied
 
 WebP stores straight colour next to alpha. `*image.NRGBA` and
@@ -245,6 +258,10 @@ on every run with `go list -deps`.
 writes `testdata/golden/jpeg_baseline.txt`; `baseline_test.go` fails when
 that table drifts.
 
+`tools/libwebp_alpha_check.py` asks libwebp, through Pillow, whether
+every alpha plane tqwebp wrote survived. Feed it the directory
+`tqbench -gates -alpha-dir` fills.
+
 `tools/libwebp_baseline.py` measures libwebp itself through Pillow and
 writes `testdata/golden/libwebp_baseline.json`. It also decodes tqwebp's
 own files with libwebp, which is the differential check of specification
@@ -259,6 +276,9 @@ module, so that dependency never reaches this module's `go.mod`.
 go generate ./...                          # corpus, colour fixture source, JPEG table
 cd bench/deepteams && go generate ./...    # deepteams table
 python3 tools/libwebp_baseline.py          # libwebp fixture (needs Pillow with WebP)
+
+go run ./cmd/tqbench -gates -alpha-dir /tmp/tqwebp-alpha
+python3 tools/libwebp_alpha_check.py /tmp/tqwebp-alpha   # alpha through libwebp
 ```
 
 ## Building and testing

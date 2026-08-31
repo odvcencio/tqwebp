@@ -52,7 +52,7 @@ type G5Overhead struct {
 const alphaQuality = 75
 
 // evaluateG5 runs the alpha correctness gate.
-func (rep *Report) evaluateG5(images []corpus.Image) {
+func (rep *Report) evaluateG5(images []corpus.Image, opts Options) {
 	for _, c := range alphaCases(images) {
 		rep.G5.Cases++
 		data, _, err := encoder.EncodeWithReconstruction(c.img, encoder.Config{
@@ -91,6 +91,12 @@ func (rep *Report) evaluateG5(images []corpus.Image) {
 		if mismatch != "" {
 			rep.G5.Notes = append(rep.G5.Notes, mismatch)
 			continue
+		}
+		if opts.WriteAlphaCase != nil {
+			if err := opts.WriteAlphaCase(c.name, c.img, data); err != nil {
+				rep.G5.Notes = append(rep.G5.Notes, fmt.Sprintf("%s: write the fixture: %v", c.name, err))
+				continue
+			}
 		}
 		rep.G5.ExactPlanes++
 		rep.G5.Overhead = append(rep.G5.Overhead, G5Overhead{
