@@ -2,6 +2,7 @@ package webp
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	"image/color"
 	"math/rand"
@@ -431,3 +432,38 @@ type genericImage struct{ m image.Image }
 func (g genericImage) ColorModel() color.Model { return g.m.ColorModel() }
 func (g genericImage) Bounds() image.Rectangle { return g.m.Bounds() }
 func (g genericImage) At(x, y int) color.Color { return g.m.At(x, y) }
+
+// TestAlphaUnderLimits proves EncodeWithLimits counts the ALPH chunk in
+// its output budget. Raw alpha is the largest part of a translucent
+// file, so a caller who caps output must see it.
+func TestAlphaUnderLimits(t *testing.T) {
+	img := translucentNRGBA(64, 48, 41)
+
+	var buf bytes.Buffer
+	if err := EncodeWithLimits(&buf, img, nil, Limits{}); err != nil {
+		t.Fatalf("encode with a zero Limits: %v", err)
+	}
+	size := buf.Len()
+
+	var plain bytes.Buffer
+	if err := Encode(&plain, img, nil); err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), plain.Bytes()) {
+		t.Error("a zero Limits changed the bytes")
+	}
+
+	var tight bytes.Buffer
+	err := EncodeWithLimits(&tight, img, nil, Limits{MaxOutputBytes: int64(size - 1)})
+	if !errors.Is(err, ErrOutputTooLarge) || !errors.Is(err, ErrLimitExceeded) {
+		t.Errorf("error is %v, want ErrOutputTooLarge and ErrLimitExceeded", err)
+	}
+	if tight.Len() != 0 {
+		t.Errorf("a refused encode wrote %d bytes", tight.Len())
+	}
+
+	var exact bytes.Buffer
+	if err := EncodeWithLimits(&exact, img, nil, Limits{MaxOutputBytes: int64(size)}); err != nil {
+		t.Errorf("a budget of exactly the file size was refused: %v", err)
+	}
+}

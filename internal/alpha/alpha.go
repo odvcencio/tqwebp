@@ -41,6 +41,44 @@
 // and the first column of every later row uses the sample above. Those
 // two rules match libwebp's decoder and golang.org/x/image/webp's
 // decoder, which the tests of this package read back through.
+//
+// # Compression method 1, designed and not built
+//
+// Method 1 carries the alpha plane as a VP8L stream. It is the change
+// that makes a translucent file smaller than its PNG; method 0 cannot,
+// because it spends one byte per pixel. This package does not build one,
+// and it will not ship a guessed bitstream. What a correct method 1
+// needs, in the order a build would add it:
+//
+//  1. A least-significant-bit-first bit writer. VP8L packs its fields
+//     from the low bit of each byte upward, which is the opposite of the
+//     boolean coder in package boolenc.
+//  2. Canonical prefix codes, length limited to 15 bits, and the
+//     19-symbol code-length code that carries them, with its own fixed
+//     symbol order and its repeat codes 16, 17, and 18.
+//  3. The simple-code form, for an alphabet of one or two symbols. The
+//     red, blue, alpha, and distance codes of an alpha stream are all
+//     constant, so each is one simple code of one symbol and costs no
+//     bits per pixel.
+//  4. The literal stream: the alpha sample of each pixel goes in the
+//     green channel of the VP8L image, and the decoder reads it back
+//     from there.
+//  5. Backward references, with the VP8L distance mapping and the
+//     prefix-coded length and distance fields. The badge masks this
+//     encoder is aimed at hold long runs of alpha zero, and step 5 is
+//     what turns those runs into a few bits.
+//  6. The predictor transform, which lowers the entropy the same way
+//     filters 1 to 3 do here, but per block.
+//
+// The chunk payload for method 1 is the VP8L stream without its 5-byte
+// header. A decoder rebuilds that header from the ALPH chunk's own
+// canvas size. Steps 1 to 4 alone give a literal-only stream of about
+// the plane's zeroth-order entropy, which on a dithered badge mask is
+// near 3 bits per sample; steps 5 and 6 are what reach a useful size.
+//
+// The selection rule, once method 1 exists: build both payloads and
+// keep the shorter one. That rule is exact, needs no model, and keeps
+// the output deterministic.
 package alpha
 
 import (
