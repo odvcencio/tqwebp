@@ -137,4 +137,47 @@ func TestRunSmall(t *testing.T) {
 	if rep.String() == "" {
 		t.Error("the report rendered as an empty string")
 	}
+
+	// Gate G5 runs over the same two images, three alpha shapes each,
+	// and it blocks the run the way G1 does.
+	if !rep.G5.Pass {
+		t.Errorf("gate G5 failed: %v", rep.G5.Notes)
+	}
+	if rep.G5.Cases != 6 {
+		t.Errorf("G5 measured %d translucent cases, want 6", rep.G5.Cases)
+	}
+	if rep.G5.ExactPlanes != rep.G5.Cases {
+		t.Errorf("%d of %d alpha planes decoded exactly", rep.G5.ExactPlanes, rep.G5.Cases)
+	}
+	if rep.G5.OpaqueSimple != len(images) {
+		t.Errorf("%d of %d opaque images kept the simple container",
+			rep.G5.OpaqueSimple, len(images))
+	}
+	for _, o := range rep.G5.Overhead {
+		if o.AlphaBytes != o.Width*o.Height {
+			t.Errorf("%s: the raw alpha plane is %d bytes, want %d",
+				o.Case, o.AlphaBytes, o.Width*o.Height)
+		}
+		if o.Bytes <= o.AlphaBytes {
+			t.Errorf("%s: the file is %d bytes and the alpha plane alone is %d",
+				o.Case, o.Bytes, o.AlphaBytes)
+		}
+	}
+}
+
+// TestG5CatchesACorruptedAlphaPlane proves the gate is not vacuous: a
+// deliberately wrong plane must fail it.
+func TestG5CatchesACorruptedAlphaPlane(t *testing.T) {
+	rep := &Report{}
+	rep.G5.Cases = 3
+	rep.G5.ExactPlanes = 2
+	rep.G5.OpaqueImages = 2
+	rep.G5.OpaqueSimple = 2
+	rep.G5.Notes = []string{"case/ramp: alpha at (0,0) decoded as 1, want 0"}
+	if rep.G5.Pass {
+		t.Error("a report with a mismatch note reported PASS")
+	}
+	if rep.String() == "" {
+		t.Error("the report rendered as an empty string")
+	}
 }

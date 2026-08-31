@@ -92,6 +92,20 @@ func (rep *Report) String() string {
 			}
 		}
 	}
+
+	fmt.Fprintf(&b, "\nG5 alpha: %s\n", verdict(rep.G5.Pass))
+	fmt.Fprintf(&b, "   %d of %d translucent pictures decoded their alpha plane sample for sample\n",
+		rep.G5.ExactPlanes, rep.G5.Cases)
+	fmt.Fprintf(&b, "   %d of %d opaque pictures kept the simple container\n",
+		rep.G5.OpaqueSimple, rep.G5.OpaqueImages)
+	for _, o := range rep.G5.Overhead {
+		fmt.Fprintf(&b, "   %-30s %5dx%-5d %9d bytes, of which %8d is the raw alpha plane (%4.1f%%), %d translucent pixels\n",
+			o.Case, o.Width, o.Height, o.Bytes, o.AlphaBytes,
+			100*float64(o.AlphaBytes)/float64(o.Bytes), o.TranslucentPixels)
+	}
+	for _, note := range rep.G5.Notes {
+		fmt.Fprintf(&b, "   failure: %s\n", note)
+	}
 	return b.String()
 }
 

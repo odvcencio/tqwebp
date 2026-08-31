@@ -174,6 +174,7 @@ go run ./cmd/tqbench -gates -json out.json   # the full measurements
 | G3 speed | reported, no bar | 23 ms per megapixel, single thread, no assembly | reported |
 | G3 rate against libwebp q75 | informative, at most 1.35x | median 1.170x | reported |
 | G4b against deepteams/webp | gated at WP-2 | photos -0.14 dB at the same file size | reported |
+| G5 alpha | every translucent picture decodes its alpha plane sample for sample, and every opaque picture keeps the simple container | 15 of 15 planes exact, 9 of 9 opaque simple | PASS |
 
 G2b's decibel clause passes with margin. Its byte-ratio clause fails, and
 the run reports it rather than gating on it. The reason is the corpus, not

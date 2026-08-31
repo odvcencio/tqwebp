@@ -103,13 +103,17 @@ func runGates(root string, images []corpus.Image, qualities, jsonPath, encodedDi
 		fmt.Printf("\ntqbench: wrote %s\n", jsonPath)
 	}
 
-	// G1 and G2 always gate the run. G2b's byte-ratio clause asks for a
-	// steepness the generated photo corpus cannot show: its per-pixel
-	// noise puts a rate wall between quality 75 and quality 90, and
-	// libwebp misses the same clause on the same images by the same
-	// shape. The -strict flag re-arms it for the day a real photo corpus
-	// lands.
-	if !report.G1.Pass || !report.G2.Pass || (strict && !report.G2b.Pass) {
+	// G1, G2, and G5 always gate the run. G5 is a correctness gate like
+	// G1: raw alpha stores the plane sample for sample, so a decoder
+	// must return it unchanged, and an opaque picture must keep the
+	// simple container.
+	//
+	// G2b's byte-ratio clause asks for a steepness the generated photo
+	// corpus cannot show: its per-pixel noise puts a rate wall between
+	// quality 75 and quality 90, and libwebp misses the same clause on
+	// the same images by the same shape. The -strict flag re-arms it for
+	// the day a real photo corpus lands.
+	if !report.G1.Pass || !report.G2.Pass || !report.G5.Pass || (strict && !report.G2b.Pass) {
 		os.Exit(1)
 	}
 }

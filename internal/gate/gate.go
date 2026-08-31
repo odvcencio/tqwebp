@@ -15,6 +15,10 @@
 //	G3  Photos against libwebp, and encode speed. Informative, not
 //	    blocking.
 //	G4b Photos against deepteams/webp, from the committed fixture.
+//	G5  Alpha. A translucent picture writes the extended container and
+//	    its alpha plane decodes sample for sample. An opaque picture
+//	    writes the simple container, with no VP8X chunk and no ALPH
+//	    chunk.
 //
 // # Two PSNR domains, on purpose
 //
@@ -82,6 +86,7 @@ type Report struct {
 	G2b G2bResult `json:"g2b"`
 	G3  G3Result  `json:"g3"`
 	G4b G4bResult `json:"g4b"`
+	G5  G5Result  `json:"g5"`
 }
 
 // G1Result reports the correctness gate.
@@ -267,6 +272,7 @@ func Run(images []corpus.Image, opts Options) (*Report, error) {
 	if err := rep.evaluateG4b(opts); err != nil {
 		return nil, err
 	}
+	rep.evaluateG5(images)
 	return rep, nil
 }
 
