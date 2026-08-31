@@ -605,7 +605,11 @@ func (e *encoder) reconstruction() *image.YCbCr {
 	}
 }
 
-// writeFile serializes the analysed frame and writes the container.
+// writeFile serializes the analysed frame and writes the simple
+// container. It knows nothing about alpha, so only the tests of this
+// package call it; they hold an opaque picture and compare bitstreams.
+// The shipped path is EncodeWithReconstruction in api.go, which chooses
+// between the simple and the extended container.
 func (e *encoder) writeFile(w io.Writer) error {
 	payload, err := e.frameBytes()
 	if err != nil {
