@@ -31,6 +31,23 @@
 // ceil(width/16)*16 by ceil(height/16)*16 pixels. The padded region
 // repeats the nearest edge pixel, which keeps the padded blocks cheap to
 // code.
+//
+// # Straight colour, not premultiplied
+//
+// WebP stores straight (non-premultiplied) colour next to its alpha
+// channel, so the forward conversion must read straight colour too. An
+// *image.NRGBA, an *image.NYCbCrA, and an opaque *image.RGBA already
+// hold it. A translucent *image.RGBA does not: its samples are scaled by
+// their own alpha. The package divides that scale out again, with the
+// arithmetic of color.NRGBAModel, so an *image.RGBA and the *image.NRGBA
+// the standard library converts it to give the same planes.
+//
+// A pixel of alpha zero carries no colour to recover: the premultiply
+// multiplied it away. Such a pixel converts as black, which is what
+// color.NRGBAModel returns for it. The choice is invisible after a
+// decoder composites the picture, because alpha zero hides the colour
+// plane. An *image.NRGBA keeps its own stored colour at alpha zero
+// instead, because that type never lost it.
 package yuv
 
 import (
@@ -143,9 +160,10 @@ func clamp8(v int32) uint8 {
 	return uint8(v)
 }
 
-// Convert reads m and returns its padded 4:2:0 planes. It ignores any
-// alpha channel; callers reject non-opaque images before they call it
-// (see IsOpaque).
+// Convert reads m and returns its padded 4:2:0 planes. It reads straight
+// colour, so a translucent *image.RGBA is un-premultiplied first; see the
+// package comment. The alpha channel itself goes to package alpha, which
+// builds the ALPH chunk.
 func Convert(m image.Image) *Planes {
 	b := m.Bounds()
 	p := NewPlanes(b.Dx(), b.Dy())
@@ -203,12 +221,16 @@ func IsOpaque(m image.Image) bool {
 // sampler reads red, green, and blue values at padded coordinates. It
 // clamps every coordinate into the source rectangle, which produces the
 // edge replication the padded macroblock columns and rows need.
+//
+// Every value the sampler returns is straight, never premultiplied. See
+// the un-premultiply section of the package comment.
 type sampler struct {
 	generic image.Image
 	rgba    *image.RGBA
 	nrgba   *image.NRGBA
 	gray    *image.Gray
 	ycbcr   *image.YCbCr
+	nycbcra *image.NYCbCrA
 	rect    image.Rectangle
 }
 
@@ -221,12 +243,51 @@ func newSampler(m image.Image) *sampler {
 		s.nrgba = t
 	case *image.Gray:
 		s.gray = t
+	case *image.NYCbCrA:
+		// The colour of an *image.NYCbCrA is straight already, so its
+		// luma and chroma read exactly like an opaque *image.YCbCr.
+		s.nycbcra = t
+		s.ycbcr = &t.YCbCr
 	case *image.YCbCr:
 		s.ycbcr = t
 	default:
 		s.generic = m
 	}
 	return s
+}
+
+// unpremultiply8 converts one premultiplied 8-bit colour sample back to
+// its straight value. The arithmetic matches color.NRGBAModel, so an
+// *image.RGBA and the *image.NRGBA the standard library converts it to
+// produce the same planes.
+func unpremultiply8(c, a uint8) uint8 {
+	if a == 0xff {
+		return c
+	}
+	if a == 0 {
+		return 0
+	}
+	v := (uint32(c) * 0xffff / uint32(a)) >> 8
+	if v > 0xff {
+		return 0xff
+	}
+	return uint8(v)
+}
+
+// unpremultiply16 converts one premultiplied 16-bit colour sample, as
+// color.Color.RGBA reports it, to a straight 8-bit value.
+func unpremultiply16(c, a uint32) uint8 {
+	if a == 0xffff {
+		return uint8(c >> 8)
+	}
+	if a == 0 {
+		return 0
+	}
+	v := (c * 0xffff / a) >> 8
+	if v > 0xff {
+		return 0xff
+	}
+	return uint8(v)
 }
 
 func (s *sampler) at(x, y int) (r, g, b uint8) {
@@ -241,12 +302,18 @@ func (s *sampler) at(x, y int) (r, g, b uint8) {
 
 	switch {
 	case s.rgba != nil:
-		// An opaque *image.RGBA carries un-premultiplied values already,
-		// because premultiplying by an alpha of 255 changes nothing.
+		// An *image.RGBA holds premultiplied colour. At an alpha of 255
+		// the two conventions agree, so the opaque path stays a plain
+		// read and every earlier file keeps its bytes.
 		i := s.rgba.PixOffset(px, py)
-		p := s.rgba.Pix[i : i+3 : i+3]
-		return p[0], p[1], p[2]
+		p := s.rgba.Pix[i : i+4 : i+4]
+		if p[3] == 0xff {
+			return p[0], p[1], p[2]
+		}
+		a := p[3]
+		return unpremultiply8(p[0], a), unpremultiply8(p[1], a), unpremultiply8(p[2], a)
 	case s.nrgba != nil:
+		// An *image.NRGBA holds straight colour already.
 		i := s.nrgba.PixOffset(px, py)
 		p := s.nrgba.Pix[i : i+3 : i+3]
 		return p[0], p[1], p[2]
@@ -257,7 +324,10 @@ func (s *sampler) at(x, y int) (r, g, b uint8) {
 		c := s.ycbcr.YCbCrAt(px, py)
 		return color.YCbCrToRGB(c.Y, c.Cb, c.Cr)
 	default:
-		cr, cg, cb, _ := s.generic.At(px, py).RGBA()
-		return uint8(cr >> 8), uint8(cg >> 8), uint8(cb >> 8)
+		cr, cg, cb, ca := s.generic.At(px, py).RGBA()
+		if ca == 0xffff {
+			return uint8(cr >> 8), uint8(cg >> 8), uint8(cb >> 8)
+		}
+		return unpremultiply16(cr, ca), unpremultiply16(cg, ca), unpremultiply16(cb, ca)
 	}
 }
