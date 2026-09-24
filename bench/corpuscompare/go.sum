@@ -1,0 +1,10 @@
+github.com/HugoSmits86/nativewebp v1.3.0 h1:n1egtEzSV4KwFtealr7dzdYq1wI/uj/bOQ/QcTcIyVE=
+github.com/HugoSmits86/nativewebp v1.3.0/go.mod h1:YNQuWenlVmSUUASVNhTDwf4d7FwYQGbGhklC8p72Vr8=
+github.com/bep/gowebp v0.4.0 h1:QihuVnvIKbRoeBNQkN0JPMM8ClLmD6V2jMftTFwSK3Q=
+github.com/bep/gowebp v0.4.0/go.mod h1:95gtYkAA8iIn1t3HkAPurRCVGV/6NhgaHJ1urz0iIwc=
+github.com/chai2010/webp v1.4.0 h1:6DA2pkkRUPnbOHvvsmGI3He1hBKf/bkRlniAiSGuEko=
+github.com/chai2010/webp v1.4.0/go.mod h1:0XVwvZWdjjdxpUEIf7b9g9VkHFnInUSYujwqTLEuldU=
+golang.org/x/image v0.38.0 h1:5l+q+Y9JDC7mBOMjo4/aPhMDcxEptsX+Tt3GgRQRPuE=
+golang.org/x/image v0.38.0/go.mod h1:/3f6vaXC+6CEanU4KJxbcUZyEePbyKbaLoDOe4ehFYY=
+m31labs.dev/turboquant v0.2.1-0.20260817041549-a9417b0723e6 h1:E3CzQzy6zizZ95jihH6LR0qPUPohjpnqODyGMqfuP4o=
+m31labs.dev/turboquant v0.2.1-0.20260817041549-a9417b0723e6/go.mod h1:7nkx3Sf/xgz/6V992ePuUpXTN6HyWL+2ueOGCEdlg84=

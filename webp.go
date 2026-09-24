@@ -43,16 +43,12 @@
 //
 // # Effort levels
 //
-// Method runs from 0 to 6. Methods 0 to 4 implement one effort level:
-// every macroblock's luma uses one of the four whole-block prediction
-// modes and one of the four chroma modes. Method 5 and 6 add a
-// conservative detailed-block pass: a macroblock whose luma the whole-
-// block modes fit poorly may be coded as sixteen independent 4x4 blocks
-// instead, but only when the candidate's sum-of-squares error is
-// strictly below half of the whole-block error. That margin is a fixed,
-// bounded proxy chosen so the selector stays conservative without a bit
-// model; the exact rate-distortion mode search and the two-pass
-// probability optimization arrive in later releases.
+// Method runs from 0 to 6. Zero selects DefaultMethod. Methods 1 to 4
+// share the whole-block prediction path. Method 5 adds all ten 4x4 luma
+// sub-modes and a rate-distortion mode search. Method 6 also adds
+// coefficient refinement, trellis search, and token probability updates.
+// Methods 5 and 6 are experimental. A higher method does not guarantee
+// better quality. Method 6 has known quality regressions on real images.
 package webp
 
 import (
@@ -79,15 +75,13 @@ const DefaultMethod = 4
 // both mean quality DefaultQuality and method DefaultMethod.
 type Options struct {
 	// Quality selects the rate-distortion point, from 1, the smallest
-	// file, to 100, the best picture. Higher quality always spends more
-	// bytes and always keeps more detail. A zero Quality means
+	// file, to 100, the highest quality setting. This is not a target
+	// size or a guaranteed perceptual score. A zero Quality means
 	// DefaultQuality, which makes the zero value of Options useful.
 	Quality int
-	// Method selects the effort level, from 0, the fastest, to 6, the
-	// slowest and best. Methods 0 to 4 share one effort level. At 5
-	// and 6 a conservative detailed-block pass may code selected
-	// macroblocks' luma as sixteen 4x4 blocks; see the Effort levels
-	// section above.
+	// Method selects an effort level from 0 to 6. Zero selects
+	// DefaultMethod. Methods 1 to 4 share one path. Methods 5 and 6 are
+	// experimental; see Effort levels. Higher values can reduce quality.
 	Method int
 }
 
