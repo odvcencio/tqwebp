@@ -1,0 +1,72 @@
+[
+  {
+    "codec": "tq4",
+    "name": "photo_kodak01",
+    "max_rss_kib": 11016
+  },
+  {
+    "codec": "tq4",
+    "name": "screenshot_pkg",
+    "max_rss_kib": 17876
+  },
+  {
+    "codec": "tq5",
+    "name": "photo_kodak01",
+    "max_rss_kib": 12164
+  },
+  {
+    "codec": "tq5",
+    "name": "screenshot_pkg",
+    "max_rss_kib": 17896
+  },
+  {
+    "codec": "tq6",
+    "name": "photo_kodak01",
+    "max_rss_kib": 19624
+  },
+  {
+    "codec": "tq6",
+    "name": "screenshot_pkg",
+    "max_rss_kib": 34644
+  },
+  {
+    "codec": "chai",
+    "name": "photo_kodak01",
+    "max_rss_kib": 14560
+  },
+  {
+    "codec": "chai",
+    "name": "screenshot_pkg",
+    "max_rss_kib": 24992
+  },
+  {
+    "codec": "bep",
+    "name": "photo_kodak01",
+    "max_rss_kib": 13508
+  },
+  {
+    "codec": "bep",
+    "name": "screenshot_pkg",
+    "max_rss_kib": 21104
+  },
+  {
+    "codec": "native",
+    "name": "photo_kodak01",
+    "max_rss_kib": 25324
+  },
+  {
+    "codec": "native",
+    "name": "screenshot_pkg",
+    "max_rss_kib": 63920
+  },
+  {
+    "codec": "cwebp",
+    "name": "photo_kodak01",
+    "max_rss_kib": 7832
+  },
+  {
+    "codec": "cwebp",
+    "name": "screenshot_pkg",
+    "max_rss_kib": 11988
+  }
+]

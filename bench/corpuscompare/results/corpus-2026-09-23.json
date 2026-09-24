@@ -1,0 +1,119 @@
+[
+  {
+    "name": "photo_kodak01",
+    "source": "https://r0k.us/graphics/kodak/kodak/kodim01.png",
+    "category": "photo",
+    "width": 768,
+    "height": 512,
+    "sha256": "29d4871c358229ef58b5aa12306eefa9e3ac6885d5edaddf1bf9f4e2e8ce1cac",
+    "original_sha256": "a56e27cbf5f843c048b6af1d6e090760e9c92fadba88b7dee0205918a37523bd",
+    "transform": "RGBA over white, no resize"
+  },
+  {
+    "name": "photo_kodak03",
+    "source": "https://r0k.us/graphics/kodak/kodak/kodim03.png",
+    "category": "photo",
+    "width": 768,
+    "height": 512,
+    "sha256": "61f6653e4bdae1b4ce3ca22c79f99809060f6032c7cdb49ab6fe861091463d4b",
+    "original_sha256": "e25ca1ff2f0c0cb5fdfd5f9b0a0bb21ac4c3de3c84a67f35b09a85d3306249db",
+    "transform": "RGBA over white, no resize"
+  },
+  {
+    "name": "photo_kodak08",
+    "source": "https://r0k.us/graphics/kodak/kodak/kodim08.png",
+    "category": "photo",
+    "width": 768,
+    "height": 512,
+    "sha256": "ac0961356fa8671887fcf827625468be7b841a1b039f83fe81134a195dabf390",
+    "original_sha256": "ba23983c76b4832ee0e8af0592664756841a16779acd69f792e268fb6d13d6e7",
+    "transform": "RGBA over white, no resize"
+  },
+  {
+    "name": "photo_kodak14",
+    "source": "https://r0k.us/graphics/kodak/kodak/kodim14.png",
+    "category": "photo",
+    "width": 768,
+    "height": 512,
+    "sha256": "a5e123ff9c96d7886712f31bf1a868e5a552cee09f52258e9945cb071d50e437",
+    "original_sha256": "55a94550ff18f3246c4074fd32b77b0c74447c26b6ad274d564d999c0450ba6e",
+    "transform": "RGBA over white, no resize"
+  },
+  {
+    "name": "photo_kodak19",
+    "source": "https://r0k.us/graphics/kodak/kodak/kodim19.png",
+    "category": "photo",
+    "width": 512,
+    "height": 768,
+    "sha256": "eb3633e3f68d4c166425e026567635c6f4ef4987c78790a3d96f40a8e0b8e526",
+    "original_sha256": "b7450b264b1b0a411390d8931b112c27905a992520fc90569dc4b920aa32bbdc",
+    "transform": "RGBA over white, no resize"
+  },
+  {
+    "name": "photo_kodak23",
+    "source": "https://r0k.us/graphics/kodak/kodak/kodim23.png",
+    "category": "photo",
+    "width": 768,
+    "height": 512,
+    "sha256": "5bd767ed1a7928db7ab7f1ec695c95ab365f7a934ff8dcb5c7cb98fae75cbda2",
+    "original_sha256": "e3111a2fd4da24af15d6459ef9eacfe54106b38e27b4a21821b75c3f5d2d5baf",
+    "transform": "RGBA over white, no resize"
+  },
+  {
+    "name": "graphic_gopher",
+    "source": "https://go.dev/doc/gopher/frontpage.png",
+    "category": "graphic",
+    "width": 250,
+    "height": 340,
+    "sha256": "1310610e771ce6dc585f1355f41aedc1b106585d858479ab8c6c5638d980c17d",
+    "original_sha256": "355147a42877e326f7bd4caddaceb7ece2c2060d5046880ac78d409d0c72d83a",
+    "transform": "RGBA over white, no resize"
+  },
+  {
+    "name": "graphic_webp1",
+    "source": "https://www.gstatic.com/webp/gallery3/1.png",
+    "category": "graphic",
+    "width": 400,
+    "height": 301,
+    "sha256": "300fbc4c746f05527b849c66386c9d1d7b33477068c1ebf2927baae5d22e6f63",
+    "original_sha256": "776130f3e1d2810c45e3bccc1c11fa6fbe14155e0c298dc61b0bea16cbbc1ad2",
+    "transform": "RGBA over white, no resize"
+  },
+  {
+    "name": "graphic_webp2",
+    "source": "https://www.gstatic.com/webp/gallery3/2.png",
+    "category": "graphic",
+    "width": 386,
+    "height": 395,
+    "sha256": "352bab5c26c16e85cd6a1f0773df7dac81bfac59b7b41d2d1978f3e5f777be54",
+    "original_sha256": "3d51a68f6474fc877a13a3b6256e3068d837ca68958823ba72965a61329734b4",
+    "transform": "RGBA over white, no resize"
+  },
+  {
+    "name": "screenshot_go",
+    "source": "https://go.dev/doc/",
+    "category": "screenshot",
+    "width": 1200,
+    "height": 800,
+    "sha256": "5074b075e0bd74ec24e804b5c6f40b2b78a3d58bad2c198cdf447dba2059eefc",
+    "transform": "Chrome headless screenshot 1200x800"
+  },
+  {
+    "name": "screenshot_hugo",
+    "source": "https://gohugo.io/",
+    "category": "screenshot",
+    "width": 1200,
+    "height": 800,
+    "sha256": "c4e6af5098a52fcef810b49eaea30093ddcec44de39499f05e85bce60974bb80",
+    "transform": "Chrome headless screenshot 1200x800"
+  },
+  {
+    "name": "screenshot_pkg",
+    "source": "https://pkg.go.dev/image",
+    "category": "screenshot",
+    "width": 1200,
+    "height": 800,
+    "sha256": "1af79d9f21e16b29aa8850bb51585141bf09aad1700c8117bbcd86d20f1e2098",
+    "transform": "Chrome headless screenshot 1200x800"
+  }
+]

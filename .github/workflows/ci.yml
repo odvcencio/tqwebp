@@ -106,3 +106,30 @@ jobs:
 
       - name: Test (deepteams golden regeneration-check)
         run: go test -count=1 ./...
+
+  bench-corpuscompare:
+    name: bench/corpuscompare (tools and rate calculation)
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: "off"
+    defaults:
+      run:
+        working-directory: bench/corpuscompare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bench/corpuscompare/go.mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Build and vet separate CGo tools
+        run: |
+          go build -o bin/encode .
+          go build -tags bep -o bin/encode-bep .
+          go vet ./...
+          go vet -tags bep ./...
+      - name: Check the rate calculation
+        run: |
+          python -m pip install numpy==2.3.5
+          python -m unittest test_rate.py

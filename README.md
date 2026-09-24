@@ -14,22 +14,26 @@ the block metrics, and the dead-zone quantizer come from
 
 ## Status
 
-Work package 1 landed: a correct encoder. What that means, exactly:
+The encoder supports opaque still images. The default is quality 75 and
+method 4. Methods 5 and 6 are experimental effort levels.
 
-- Every corpus image encodes, decodes, and keeps its size, at every
-  quality.
-- With the loop filter at level 0, an independent decoder reproduces the
-  encoder's own picture byte for byte, on all three planes, at every
-  quality tested.
-- On the photo class, tqwebp spends 0.74 times the bytes stdlib JPEG
-  quality 82 spends, at the same luma quality.
-- Against libwebp at quality 75, tqwebp spends 1.17 times the bytes for
-  the same luma quality.
+- Methods 1 to 4 use whole-block luma prediction. Method 0 selects method 4.
+- Method 5 adds all ten 4x4 prediction sub-modes and a rate-distortion search.
+- Method 6 adds coefficient refinement, trellis search, and token probability
+  updates with a second analysis pass. It can lose substantial quality.
+- Loop filter tuning, production adaptive quantization, and alpha support
+  are not enabled in this release.
 
-What is missing, and lands next: the 4x4 prediction sub-modes, the
-rate-distortion mode search, the two-pass probability optimization, and
-tuned loop filter levels (work package 2). Those tools decide text and
-hard-edge content, where tqwebp trails today.
+The [real-image comparison](bench/corpuscompare/results/2026-09-23.md) covers
+12 photos, graphics, and screenshots. At cwebp q75 SSIM, method 4 needs a
+median 1.69x the bytes on six Kodak photos. Method 5 needs 1.21x. Their
+median q75 encode times are 0.61x and 1.99x the cwebp CLI time on those
+photos. These are different quality and timing comparisons; see the method
+notes. Method 6 has no shared SSIM range with cwebp on this q50 to q90 sweep.
+
+The synthetic gates below remain useful correctness checks. They do not
+establish rate or speed on real photos. Do not infer libwebp quality parity
+from equal quality labels.
 
 ## Using it
 
@@ -47,9 +51,8 @@ if err := webp.Encode(f, img, &webp.Options{Quality: 80}); err != nil {
 ```
 
 The interface mirrors `image/jpeg`. A nil `*Options`, and the zero value,
-both mean quality 75 and method 4. Quality 75 lands within 0.02 dB of
-libwebp's quality 75 on the photo corpus, so the knob means what a caller
-who knows `cwebp` expects it to mean.
+both mean quality 75 and method 4. Quality selects an encoder setting,
+not a target PSNR, SSIM, or output size.
 
 For untrusted image sizes or output budgets, `EncodeWithLimits` adds an
 explicit resource boundary without changing the default `Encode` behavior:
@@ -72,19 +75,14 @@ the complete RIFF file. The file is serialized before that cap is checked,
 so an output-cap refusal returns `ErrOutputTooLarge` (and
 `ErrLimitExceeded` via `errors.Is`) without writing a partial file.
 
-The `Method` knob now carries one implemented distinction. Methods 0 to 4
-share a single effort level: every macroblock's luma uses one of the four
-whole-block prediction modes. Methods 5 and 6 add a conservative
-detailed-block pass that may code a macroblock's luma as sixteen 4x4
-blocks instead, but only when the candidate's sum-of-squares error is
-strictly below half of what the best whole-block mode left. The rule is
-an error-only proxy with a fixed margin -- it prices no bits, so it is
-not a rate-distortion search -- and methods below 5 never run it, so
-their output stays byte for byte what earlier releases wrote.
+Methods 5 and 6 use the implemented rate-distortion search. Higher method
+values do not guarantee better quality at the same quality setting. Keep
+method 4 for the stable effort path. Evaluate method 5 on your own inputs.
+Use method 6 only for experiments until its quality regressions are resolved.
 
-Encode refuses an image with a translucent pixel and returns
-`ErrAlphaUnsupported`. Alpha arrives with work package 5, and refusing is
-the only way a pipeline cannot lose a mask in silence.
+Encode returns `ErrAlphaUnsupported` for an image with a translucent pixel.
+It does not silently discard alpha. This branch does not write metadata or
+animation chunks.
 
 Output is deterministic: the same image and the same options always
 produce the same bytes, at every value of GOMAXPROCS.
