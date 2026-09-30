@@ -2,9 +2,9 @@
 //
 // A lossy WebP file is a VP8 key frame inside a RIFF container. This
 // package writes that file with no cgo, no WebAssembly runtime, and no
-// foreign function interface. Its output decodes in every browser and in
-// golang.org/x/image/webp, which this repository's tests use as an
-// independent oracle.
+// foreign function interface. Its output is independently decoded by libwebp
+// in the measurement harness and by golang.org/x/image/vp8 in automated
+// reconstruction tests.
 //
 // The interface mirrors image/jpeg, so callers who know the standard
 // library know this package:
@@ -48,7 +48,8 @@
 // sub-modes and a rate-distortion mode search. Method 6 also adds
 // coefficient refinement, trellis search, and token probability updates.
 // Methods 5 and 6 are experimental. A higher method does not guarantee
-// better quality. Method 6 has known quality regressions on real images.
+// better quality. Method 6 uses a separate, conservative coefficient rate
+// weight to avoid the quality collapse of the earlier refinement path.
 package webp
 
 import (
@@ -57,6 +58,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"reflect"
 
 	"m31labs.dev/tqwebp/internal/encoder"
 	"m31labs.dev/tqwebp/internal/frame"
@@ -102,6 +104,12 @@ type Limits struct {
 
 // Sentinel errors Encode returns. Callers can test them with errors.Is.
 var (
+	// ErrInvalidImage reports a nil image or empty or inverted bounds.
+	ErrInvalidImage = errors.New("tqwebp: invalid image")
+
+	// ErrInvalidWriter reports a nil output writer.
+	ErrInvalidWriter = errors.New("tqwebp: invalid writer")
+
 	// ErrAlphaUnsupported reports an image with at least one translucent
 	// pixel. This release codes opaque images only, and it refuses rather
 	// than dropping the alpha channel in silence.
@@ -131,26 +139,14 @@ var (
 // Encode writes m to w in the lossy WebP format. A nil o means the
 // default options.
 //
-// Encode buffers the whole file before it writes, because the container
+// Encode buffers the VP8 frame before it writes, because the container
 // size, the frame tag, and the partition length all precede the data they
-// describe.
+// describe. Nil images and empty or inverted bounds return ErrInvalidImage;
+// nil writers return ErrInvalidWriter. Writer errors are returned unchanged,
+// and a short write returns io.ErrShortWrite. See EncodeWithLimits for
+// resource bounds. Image implementations must provide valid pixel storage.
 func Encode(w io.Writer, m image.Image, o *Options) error {
-	cfg, err := configFor(o)
-	if err != nil {
-		return err
-	}
-
-	b := m.Bounds()
-	if b.Dx() <= 0 || b.Dy() <= 0 {
-		return fmt.Errorf("tqwebp: image is %dx%d pixels", b.Dx(), b.Dy())
-	}
-	if b.Dx() > frame.MaxDimension || b.Dy() > frame.MaxDimension {
-		return ErrTooLarge
-	}
-	if !yuv.IsOpaque(m) {
-		return ErrAlphaUnsupported
-	}
-	return encoder.Encode(w, m, cfg)
+	return EncodeWithLimits(w, m, o, Limits{})
 }
 
 // EncodeWithLimits writes m in the lossy WebP format subject to limits. A
@@ -161,6 +157,8 @@ func Encode(w io.Writer, m image.Image, o *Options) error {
 // Opaque or At and before it allocates padded image planes. The complete
 // WebP file is serialized into a private buffer before MaxOutputBytes is
 // checked, so an output-cap refusal never writes a partial file to w.
+// MaxOutputBytes is not a memory cap. Writer failures can leave partial
+// output; errors are returned unchanged and short writes return io.ErrShortWrite.
 func EncodeWithLimits(w io.Writer, m image.Image, o *Options, limits Limits) error {
 	cfg, err := configFor(o)
 	if err != nil {
@@ -170,18 +168,27 @@ func EncodeWithLimits(w io.Writer, m image.Image, o *Options, limits Limits) err
 		return err
 	}
 
-	b := m.Bounds()
-	width, height := b.Dx(), b.Dy()
-	if width <= 0 || height <= 0 {
-		return fmt.Errorf("tqwebp: image is %dx%d pixels", width, height)
+	if nilInterface(w) {
+		return ErrInvalidWriter
 	}
-	if limits.MaxWidth > 0 && width > limits.MaxWidth {
+	if nilInterface(m) {
+		return ErrInvalidImage
+	}
+	b := m.Bounds()
+	if b.Max.X <= b.Min.X || b.Max.Y <= b.Min.Y {
+		return fmt.Errorf("%w: empty or inverted bounds %v", ErrInvalidImage, b)
+	}
+	// Unsigned subtraction handles bounds that span the signed int range
+	// without allowing overflow to turn a huge image into a small one.
+	width := uint64(b.Max.X) - uint64(b.Min.X)
+	height := uint64(b.Max.Y) - uint64(b.Min.Y)
+	if limits.MaxWidth > 0 && width > uint64(limits.MaxWidth) {
 		return fmt.Errorf("%w: width %d exceeds MaxWidth %d", ErrLimitExceeded, width, limits.MaxWidth)
 	}
-	if limits.MaxHeight > 0 && height > limits.MaxHeight {
+	if limits.MaxHeight > 0 && height > uint64(limits.MaxHeight) {
 		return fmt.Errorf("%w: height %d exceeds MaxHeight %d", ErrLimitExceeded, height, limits.MaxHeight)
 	}
-	if limits.MaxPixels > 0 && uint64(width) > uint64(limits.MaxPixels)/uint64(height) {
+	if limits.MaxPixels > 0 && width > uint64(limits.MaxPixels)/height {
 		return fmt.Errorf("%w: image has more than MaxPixels %d pixels", ErrLimitExceeded, limits.MaxPixels)
 	}
 	if width > frame.MaxDimension || height > frame.MaxDimension {
@@ -190,6 +197,10 @@ func EncodeWithLimits(w io.Writer, m image.Image, o *Options, limits Limits) err
 
 	if !yuv.IsOpaque(m) {
 		return ErrAlphaUnsupported
+	}
+
+	if limits.MaxOutputBytes == 0 {
+		return encoder.Encode(w, m, cfg)
 	}
 
 	var encoded bytes.Buffer
@@ -245,4 +256,18 @@ func configFor(o *Options) (encoder.Config, error) {
 		cfg.Method = o.Method
 	}
 	return cfg, nil
+}
+
+// nilInterface also catches typed nil images and writers before invoking
+// their methods. Custom implementations remain responsible for valid storage.
+func nilInterface(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return rv.IsNil()
+	}
+	return false
 }

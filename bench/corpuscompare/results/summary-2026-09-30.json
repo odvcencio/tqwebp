@@ -1,0 +1,834 @@
+{
+  "means": [
+    {
+      "category": "graphic",
+      "codec": "cwebp",
+      "quality": 50,
+      "n": 3,
+      "bytes": 5560.666666666667,
+      "ms": 14.99581900012951,
+      "psnr_rgb": 36.4046323476811,
+      "psnr_y": 39.22181753296776,
+      "ssim_y": 0.9804752879793022
+    },
+    {
+      "category": "graphic",
+      "codec": "cwebp",
+      "quality": 75,
+      "n": 3,
+      "bytes": 7007.333333333333,
+      "ms": 14.41895966672746,
+      "psnr_rgb": 38.17980351630467,
+      "psnr_y": 41.51551889009407,
+      "ssim_y": 0.9855582896056365
+    },
+    {
+      "category": "graphic",
+      "codec": "cwebp",
+      "quality": 90,
+      "n": 3,
+      "bytes": 11930.666666666666,
+      "ms": 15.389108333389837,
+      "psnr_rgb": 42.140840089890006,
+      "psnr_y": 47.46672462303562,
+      "ssim_y": 0.9941975616951807
+    },
+    {
+      "category": "graphic",
+      "codec": "tq4",
+      "quality": 50,
+      "n": 3,
+      "bytes": 15066,
+      "ms": 4.4344166666666665,
+      "psnr_rgb": 37.9162444775916,
+      "psnr_y": 41.01533796059115,
+      "ssim_y": 0.9804050435880919
+    },
+    {
+      "category": "graphic",
+      "codec": "tq4",
+      "quality": 75,
+      "n": 3,
+      "bytes": 17008.666666666668,
+      "ms": 4.508079333333333,
+      "psnr_rgb": 38.74040111758075,
+      "psnr_y": 42.17924130103058,
+      "ssim_y": 0.9836459206966968
+    },
+    {
+      "category": "graphic",
+      "codec": "tq4",
+      "quality": 90,
+      "n": 3,
+      "bytes": 29422,
+      "ms": 5.696535666666667,
+      "psnr_rgb": 42.861088343629994,
+      "psnr_y": 48.643910510068785,
+      "ssim_y": 0.9944057614314178
+    },
+    {
+      "category": "graphic",
+      "codec": "tq5",
+      "quality": 50,
+      "n": 3,
+      "bytes": 8071.333333333333,
+      "ms": 11.487839666666666,
+      "psnr_rgb": 38.138949803193135,
+      "psnr_y": 41.45236780507995,
+      "ssim_y": 0.9841027317136979
+    },
+    {
+      "category": "graphic",
+      "codec": "tq5",
+      "quality": 75,
+      "n": 3,
+      "bytes": 9144.666666666666,
+      "ms": 12.368415,
+      "psnr_rgb": 38.92712206153372,
+      "psnr_y": 42.60832787382527,
+      "ssim_y": 0.9866815894080679
+    },
+    {
+      "category": "graphic",
+      "codec": "tq5",
+      "quality": 90,
+      "n": 3,
+      "bytes": 17346.666666666668,
+      "ms": 13.315538333333333,
+      "psnr_rgb": 42.963395968441205,
+      "psnr_y": 48.77946842448027,
+      "ssim_y": 0.9947339932047272
+    },
+    {
+      "category": "graphic",
+      "codec": "tq6",
+      "quality": 50,
+      "n": 3,
+      "bytes": 7209.333333333333,
+      "ms": 48.95952233333333,
+      "psnr_rgb": 38.07198883523223,
+      "psnr_y": 41.345771699091856,
+      "ssim_y": 0.9839722209483117
+    },
+    {
+      "category": "graphic",
+      "codec": "tq6",
+      "quality": 75,
+      "n": 3,
+      "bytes": 8028.666666666667,
+      "ms": 51.528731666666665,
+      "psnr_rgb": 38.88632505900237,
+      "psnr_y": 42.51296117175409,
+      "ssim_y": 0.9864105497970244
+    },
+    {
+      "category": "graphic",
+      "codec": "tq6",
+      "quality": 90,
+      "n": 3,
+      "bytes": 13218.666666666666,
+      "ms": 66.53325466666666,
+      "psnr_rgb": 42.88906933418489,
+      "psnr_y": 48.61473526860866,
+      "ssim_y": 0.9944792152232665
+    },
+    {
+      "category": "photo",
+      "codec": "cwebp",
+      "quality": 50,
+      "n": 6,
+      "bytes": 39407,
+      "ms": 36.72579433335462,
+      "psnr_rgb": 33.08289661497629,
+      "psnr_y": 34.449149287343985,
+      "ssim_y": 0.9256305026217058
+    },
+    {
+      "category": "photo",
+      "codec": "cwebp",
+      "quality": 75,
+      "n": 6,
+      "bytes": 54071,
+      "ms": 39.73459233323714,
+      "psnr_rgb": 35.02202693337506,
+      "psnr_y": 36.63844689371403,
+      "ssim_y": 0.9508668463458698
+    },
+    {
+      "category": "photo",
+      "codec": "cwebp",
+      "quality": 90,
+      "n": 6,
+      "bytes": 104891.66666666667,
+      "ms": 44.68236949999967,
+      "psnr_rgb": 39.511793671500925,
+      "psnr_y": 42.40254683488736,
+      "ssim_y": 0.9826668906209205
+    },
+    {
+      "category": "photo",
+      "codec": "tq4",
+      "quality": 50,
+      "n": 6,
+      "bytes": 72152,
+      "ms": 18.938141,
+      "psnr_rgb": 34.419990027349506,
+      "psnr_y": 36.05804350474822,
+      "ssim_y": 0.9370766231350047
+    },
+    {
+      "category": "photo",
+      "codec": "tq4",
+      "quality": 75,
+      "n": 6,
+      "bytes": 85367.66666666667,
+      "ms": 19.638409666666668,
+      "psnr_rgb": 35.31638949822112,
+      "psnr_y": 37.12841818703516,
+      "ssim_y": 0.947983151711026
+    },
+    {
+      "category": "photo",
+      "codec": "tq4",
+      "quality": 90,
+      "n": 6,
+      "bytes": 186129,
+      "ms": 24.338068833333335,
+      "psnr_rgb": 39.71878583260609,
+      "psnr_y": 42.90213072984361,
+      "ssim_y": 0.9820204675621791
+    },
+    {
+      "category": "photo",
+      "codec": "tq5",
+      "quality": 50,
+      "n": 6,
+      "bytes": 54863,
+      "ms": 54.552119833333336,
+      "psnr_rgb": 34.447060841278095,
+      "psnr_y": 36.12543938444508,
+      "ssim_y": 0.9388861482140163
+    },
+    {
+      "category": "photo",
+      "codec": "tq5",
+      "quality": 75,
+      "n": 6,
+      "bytes": 63487.333333333336,
+      "ms": 55.35349883333333,
+      "psnr_rgb": 35.32285822312548,
+      "psnr_y": 37.17170683440946,
+      "ssim_y": 0.9494288188379062
+    },
+    {
+      "category": "photo",
+      "codec": "tq5",
+      "quality": 90,
+      "n": 6,
+      "bytes": 131830.33333333334,
+      "ms": 68.454192,
+      "psnr_rgb": 39.684633971932,
+      "psnr_y": 42.86555677582264,
+      "ssim_y": 0.9821439664452656
+    },
+    {
+      "category": "photo",
+      "codec": "tq6",
+      "quality": 50,
+      "n": 6,
+      "bytes": 49705.333333333336,
+      "ms": 256.5090303333333,
+      "psnr_rgb": 34.40184044364988,
+      "psnr_y": 36.05949143742398,
+      "ssim_y": 0.9376541947446811
+    },
+    {
+      "category": "photo",
+      "codec": "tq6",
+      "quality": 75,
+      "n": 6,
+      "bytes": 57177.333333333336,
+      "ms": 278.283455,
+      "psnr_rgb": 35.285516676801834,
+      "psnr_y": 37.10902617928542,
+      "ssim_y": 0.9483917137335776
+    },
+    {
+      "category": "photo",
+      "codec": "tq6",
+      "quality": 90,
+      "n": 6,
+      "bytes": 107611.66666666667,
+      "ms": 469.8769795,
+      "psnr_rgb": 39.64654393757062,
+      "psnr_y": 42.7696049053745,
+      "ssim_y": 0.9812224851916488
+    },
+    {
+      "category": "screenshot",
+      "codec": "cwebp",
+      "quality": 50,
+      "n": 3,
+      "bytes": 52515.333333333336,
+      "ms": 61.741161666456414,
+      "psnr_rgb": 31.27014310212067,
+      "psnr_y": 39.68876162611681,
+      "ssim_y": 0.9965004880045961
+    },
+    {
+      "category": "screenshot",
+      "codec": "cwebp",
+      "quality": 75,
+      "n": 3,
+      "bytes": 63286,
+      "ms": 63.43470400012544,
+      "psnr_rgb": 31.92472374819389,
+      "psnr_y": 42.33598578109437,
+      "ssim_y": 0.9979979116239798
+    },
+    {
+      "category": "screenshot",
+      "codec": "cwebp",
+      "quality": 90,
+      "n": 3,
+      "bytes": 94602.66666666667,
+      "ms": 68.32787499964373,
+      "psnr_rgb": 32.65010632320023,
+      "psnr_y": 47.66282174940912,
+      "ssim_y": 0.9994090116837397
+    },
+    {
+      "category": "screenshot",
+      "codec": "tq4",
+      "quality": 50,
+      "n": 3,
+      "bytes": 136742.66666666666,
+      "ms": 39.04440733333333,
+      "psnr_rgb": 31.874295802624122,
+      "psnr_y": 42.35664154528236,
+      "ssim_y": 0.9975187216243726
+    },
+    {
+      "category": "screenshot",
+      "codec": "tq4",
+      "quality": 75,
+      "n": 3,
+      "bytes": 153300,
+      "ms": 40.925913,
+      "psnr_rgb": 32.051520362006556,
+      "psnr_y": 43.48535173692604,
+      "ssim_y": 0.998019934915289
+    },
+    {
+      "category": "screenshot",
+      "codec": "tq4",
+      "quality": 90,
+      "n": 3,
+      "bytes": 247424,
+      "ms": 44.09477733333333,
+      "psnr_rgb": 32.65287540297099,
+      "psnr_y": 49.05786435544806,
+      "ssim_y": 0.9994889612930302
+    },
+    {
+      "category": "screenshot",
+      "codec": "tq5",
+      "quality": 50,
+      "n": 3,
+      "bytes": 87427.33333333333,
+      "ms": 85.81571833333334,
+      "psnr_rgb": 31.88851641854522,
+      "psnr_y": 42.53876127313309,
+      "ssim_y": 0.9980162119218215
+    },
+    {
+      "category": "screenshot",
+      "codec": "tq5",
+      "quality": 75,
+      "n": 3,
+      "bytes": 98302.66666666667,
+      "ms": 88.41806133333333,
+      "psnr_rgb": 32.067869897376596,
+      "psnr_y": 43.748806981464455,
+      "ssim_y": 0.9985878864379174
+    },
+    {
+      "category": "screenshot",
+      "codec": "tq5",
+      "quality": 90,
+      "n": 3,
+      "bytes": 176616.66666666666,
+      "ms": 96.20514666666666,
+      "psnr_rgb": 32.65611320061071,
+      "psnr_y": 49.20741381183863,
+      "ssim_y": 0.9995796521506812
+    },
+    {
+      "category": "screenshot",
+      "codec": "tq6",
+      "quality": 50,
+      "n": 3,
+      "bytes": 66080,
+      "ms": 385.38852966666667,
+      "psnr_rgb": 31.86993447650907,
+      "psnr_y": 42.344982995711916,
+      "ssim_y": 0.9977312001714649
+    },
+    {
+      "category": "screenshot",
+      "codec": "tq6",
+      "quality": 75,
+      "n": 3,
+      "bytes": 71909.33333333333,
+      "ms": 407.3172633333333,
+      "psnr_rgb": 32.053914918723834,
+      "psnr_y": 43.54550772792742,
+      "ssim_y": 0.9983726991198637
+    },
+    {
+      "category": "screenshot",
+      "codec": "tq6",
+      "quality": 90,
+      "n": 3,
+      "bytes": 103954,
+      "ms": 462.8262223333333,
+      "psnr_rgb": 32.653309055991485,
+      "psnr_y": 49.045817711041195,
+      "ssim_y": 0.9995068739770062
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "graphic_gopher",
+      "category": "graphic",
+      "codec": "tq4",
+      "status": "ok",
+      "bd_percent": 156.5002609983569,
+      "matched_q75_ratio": 2.605780804113489,
+      "overlap_ssimdb": [
+        25.843637231119168,
+        32.04738194981634
+      ]
+    },
+    {
+      "name": "graphic_webp1",
+      "category": "graphic",
+      "codec": "tq4",
+      "status": "ok",
+      "bd_percent": 100.52255400143491,
+      "matched_q75_ratio": 2.031902472710879,
+      "overlap_ssimdb": [
+        14.426670396537109,
+        18.97558952188314
+      ]
+    },
+    {
+      "name": "graphic_webp2",
+      "category": "graphic",
+      "codec": "tq4",
+      "status": "ok",
+      "bd_percent": 201.42181214842915,
+      "matched_q75_ratio": 3.0536499576840024,
+      "overlap_ssimdb": [
+        17.899262945873456,
+        23.261448106660254
+      ]
+    },
+    {
+      "name": "graphic_gopher",
+      "category": "graphic",
+      "codec": "tq5",
+      "status": "ok",
+      "bd_percent": 8.691066701739981,
+      "matched_q75_ratio": null,
+      "overlap_ssimdb": [
+        28.159346501421645,
+        32.04738194981634
+      ]
+    },
+    {
+      "name": "graphic_webp1",
+      "category": "graphic",
+      "codec": "tq5",
+      "status": "ok",
+      "bd_percent": 24.599944665422836,
+      "matched_q75_ratio": 1.220583224182959,
+      "overlap_ssimdb": [
+        14.70602212546284,
+        18.97558952188314
+      ]
+    },
+    {
+      "name": "graphic_webp2",
+      "category": "graphic",
+      "codec": "tq5",
+      "status": "ok",
+      "bd_percent": 33.32546440808033,
+      "matched_q75_ratio": 1.2498278282016055,
+      "overlap_ssimdb": [
+        19.091585842219068,
+        23.769676896001105
+      ]
+    },
+    {
+      "name": "graphic_gopher",
+      "category": "graphic",
+      "codec": "tq6",
+      "status": "ok",
+      "bd_percent": -11.224893450885077,
+      "matched_q75_ratio": null,
+      "overlap_ssimdb": [
+        28.933995441233836,
+        32.04738194981634
+      ]
+    },
+    {
+      "name": "graphic_webp1",
+      "category": "graphic",
+      "codec": "tq6",
+      "status": "ok",
+      "bd_percent": 12.610537259529275,
+      "matched_q75_ratio": 1.1406149466671478,
+      "overlap_ssimdb": [
+        14.66802951366522,
+        18.97558952188314
+      ]
+    },
+    {
+      "name": "graphic_webp2",
+      "category": "graphic",
+      "codec": "tq6",
+      "status": "ok",
+      "bd_percent": 10.712046005633535,
+      "matched_q75_ratio": 1.1074086055267318,
+      "overlap_ssimdb": [
+        18.972111483151817,
+        23.697618442083183
+      ]
+    },
+    {
+      "name": "photo_kodak01",
+      "category": "photo",
+      "codec": "tq4",
+      "status": "ok",
+      "bd_percent": 65.34325193901186,
+      "matched_q75_ratio": 1.5287869060065433,
+      "overlap_ssimdb": [
+        12.578083575818379,
+        19.67949106983567
+      ]
+    },
+    {
+      "name": "photo_kodak03",
+      "category": "photo",
+      "codec": "tq4",
+      "status": "ok",
+      "bd_percent": 75.6773900810393,
+      "matched_q75_ratio": 1.7587541213714042,
+      "overlap_ssimdb": [
+        12.324105302504835,
+        16.62537996882308
+      ]
+    },
+    {
+      "name": "photo_kodak08",
+      "category": "photo",
+      "codec": "tq4",
+      "status": "ok",
+      "bd_percent": 84.03769450336205,
+      "matched_q75_ratio": 1.76526329846176,
+      "overlap_ssimdb": [
+        12.820519582858394,
+        19.578688873996438
+      ]
+    },
+    {
+      "name": "photo_kodak14",
+      "category": "photo",
+      "codec": "tq4",
+      "status": "ok",
+      "bd_percent": 70.77257943937919,
+      "matched_q75_ratio": 1.615568893194611,
+      "overlap_ssimdb": [
+        11.16736356234256,
+        17.964358256502525
+      ]
+    },
+    {
+      "name": "photo_kodak19",
+      "category": "photo",
+      "codec": "tq4",
+      "status": "ok",
+      "bd_percent": 60.81336359999172,
+      "matched_q75_ratio": 1.5280401276728415,
+      "overlap_ssimdb": [
+        11.435990524728298,
+        16.52194640426531
+      ]
+    },
+    {
+      "name": "photo_kodak23",
+      "category": "photo",
+      "codec": "tq4",
+      "status": "ok",
+      "bd_percent": 73.11321547787739,
+      "matched_q75_ratio": 1.7784898959163016,
+      "overlap_ssimdb": [
+        11.990036404179595,
+        15.718106876297854
+      ]
+    },
+    {
+      "name": "photo_kodak01",
+      "category": "photo",
+      "codec": "tq5",
+      "status": "ok",
+      "bd_percent": 22.463587564443976,
+      "matched_q75_ratio": 1.1731082594675406,
+      "overlap_ssimdb": [
+        12.649716761116313,
+        19.678239159112632
+      ]
+    },
+    {
+      "name": "photo_kodak03",
+      "category": "photo",
+      "codec": "tq5",
+      "status": "ok",
+      "bd_percent": 19.905613927899644,
+      "matched_q75_ratio": 1.2134307799717612,
+      "overlap_ssimdb": [
+        12.576525196306154,
+        16.62537996882308
+      ]
+    },
+    {
+      "name": "photo_kodak08",
+      "category": "photo",
+      "codec": "tq5",
+      "status": "ok",
+      "bd_percent": 28.29524363530922,
+      "matched_q75_ratio": 1.2244542523928705,
+      "overlap_ssimdb": [
+        12.898920860511636,
+        19.548033851288
+      ]
+    },
+    {
+      "name": "photo_kodak14",
+      "category": "photo",
+      "codec": "tq5",
+      "status": "ok",
+      "bd_percent": 25.392886432512984,
+      "matched_q75_ratio": 1.2083454595355547,
+      "overlap_ssimdb": [
+        11.26089174426241,
+        17.93855736445511
+      ]
+    },
+    {
+      "name": "photo_kodak19",
+      "category": "photo",
+      "codec": "tq5",
+      "status": "ok",
+      "bd_percent": 20.716269178285774,
+      "matched_q75_ratio": 1.1655152502904615,
+      "overlap_ssimdb": [
+        11.49244784299146,
+        16.532024296906815
+      ]
+    },
+    {
+      "name": "photo_kodak23",
+      "category": "photo",
+      "codec": "tq5",
+      "status": "ok",
+      "bd_percent": 22.280306103113666,
+      "matched_q75_ratio": 1.244927275785915,
+      "overlap_ssimdb": [
+        12.212387457060686,
+        15.718106876297854
+      ]
+    },
+    {
+      "name": "photo_kodak01",
+      "category": "photo",
+      "codec": "tq6",
+      "status": "ok",
+      "bd_percent": 6.193110672590274,
+      "matched_q75_ratio": 1.0579033093866959,
+      "overlap_ssimdb": [
+        12.543667936224228,
+        19.510221091311312
+      ]
+    },
+    {
+      "name": "photo_kodak03",
+      "category": "photo",
+      "codec": "tq6",
+      "status": "ok",
+      "bd_percent": 9.538519825650038,
+      "matched_q75_ratio": 1.123343530112646,
+      "overlap_ssimdb": [
+        12.506150938605778,
+        16.62537996882308
+      ]
+    },
+    {
+      "name": "photo_kodak08",
+      "category": "photo",
+      "codec": "tq6",
+      "status": "ok",
+      "bd_percent": 10.341478315833697,
+      "matched_q75_ratio": 1.0942135490013596,
+      "overlap_ssimdb": [
+        12.773452495188643,
+        19.3793411342735
+      ]
+    },
+    {
+      "name": "photo_kodak14",
+      "category": "photo",
+      "codec": "tq6",
+      "status": "ok",
+      "bd_percent": 10.418368638271325,
+      "matched_q75_ratio": 1.0964745943717311,
+      "overlap_ssimdb": [
+        11.150703340424954,
+        17.78988460141179
+      ]
+    },
+    {
+      "name": "photo_kodak19",
+      "category": "photo",
+      "codec": "tq6",
+      "status": "ok",
+      "bd_percent": 8.289113665950776,
+      "matched_q75_ratio": 1.0682197386936838,
+      "overlap_ssimdb": [
+        11.446533524094036,
+        16.18822196753315
+      ]
+    },
+    {
+      "name": "photo_kodak23",
+      "category": "photo",
+      "codec": "tq6",
+      "status": "ok",
+      "bd_percent": 13.913282705964436,
+      "matched_q75_ratio": 1.1852988651259657,
+      "overlap_ssimdb": [
+        12.143074249517841,
+        15.57808644578341
+      ]
+    },
+    {
+      "name": "screenshot_go",
+      "category": "screenshot",
+      "codec": "tq4",
+      "status": "ok",
+      "bd_percent": 142.38560985399266,
+      "matched_q75_ratio": 2.4081294875759975,
+      "overlap_ssimdb": [
+        26.234411766640974,
+        32.276513492440955
+      ]
+    },
+    {
+      "name": "screenshot_hugo",
+      "category": "screenshot",
+      "codec": "tq4",
+      "status": "ok",
+      "bd_percent": 147.26685808293118,
+      "matched_q75_ratio": 2.383357260254427,
+      "overlap_ssimdb": [
+        26.20217816068387,
+        32.315588058738996
+      ]
+    },
+    {
+      "name": "screenshot_pkg",
+      "category": "screenshot",
+      "codec": "tq4",
+      "status": "ok",
+      "bd_percent": 142.59076687369628,
+      "matched_q75_ratio": 2.4199104558227478,
+      "overlap_ssimdb": [
+        25.740902722000016,
+        32.26071517022727
+      ]
+    },
+    {
+      "name": "screenshot_go",
+      "category": "screenshot",
+      "codec": "tq5",
+      "status": "ok",
+      "bd_percent": 49.706844610534716,
+      "matched_q75_ratio": 1.429495628758038,
+      "overlap_ssimdb": [
+        27.239370823518993,
+        32.276513492440955
+      ]
+    },
+    {
+      "name": "screenshot_hugo",
+      "category": "screenshot",
+      "codec": "tq5",
+      "status": "ok",
+      "bd_percent": 31.88983445403273,
+      "matched_q75_ratio": null,
+      "overlap_ssimdb": [
+        27.182701997893094,
+        32.315588058738996
+      ]
+    },
+    {
+      "name": "screenshot_pkg",
+      "category": "screenshot",
+      "codec": "tq5",
+      "status": "ok",
+      "bd_percent": 46.18220228084502,
+      "matched_q75_ratio": 1.4309060498926285,
+      "overlap_ssimdb": [
+        26.675546681001357,
+        32.26071517022727
+      ]
+    },
+    {
+      "name": "screenshot_go",
+      "category": "screenshot",
+      "codec": "tq6",
+      "status": "ok",
+      "bd_percent": 4.6874056395104,
+      "matched_q75_ratio": 1.0819458379896374,
+      "overlap_ssimdb": [
+        26.622450853724786,
+        32.276513492440955
+      ]
+    },
+    {
+      "name": "screenshot_hugo",
+      "category": "screenshot",
+      "codec": "tq6",
+      "status": "ok",
+      "bd_percent": 6.554675722985981,
+      "matched_q75_ratio": null,
+      "overlap_ssimdb": [
+        26.617305531253166,
+        32.241495389923415
+      ]
+    },
+    {
+      "name": "screenshot_pkg",
+      "category": "screenshot",
+      "codec": "tq6",
+      "status": "ok",
+      "bd_percent": 5.857330671063932,
+      "matched_q75_ratio": 1.1014089047948663,
+      "overlap_ssimdb": [
+        26.106820246446013,
+        32.26071517022727
+      ]
+    }
+  ]
+}

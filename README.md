@@ -1,213 +1,160 @@
 # tqwebp
 
-A lossy WebP encoder in pure Go. No cgo, no WebAssembly runtime, no
-foreign function interface: that policy is the founding rule of this
-project, not a later constraint.
+tqwebp encodes **opaque still images as lossy WebP in pure Go**. It needs no
+cgo, native library, WebAssembly runtime, or external encoder process.
+The API follows `image/jpeg`: `Encode(io.Writer, image.Image, *Options)`.
+Go 1.26 or newer is required. The package name is `webp`.
 
-tqwebp writes a VP8 key frame inside a RIFF container. Its output decodes
-in every browser, in libwebp, and in `golang.org/x/image/webp`, which this
-repository uses as an independent oracle on every test run.
+```sh
+go get m31labs.dev/tqwebp
+```
 
-Part of the TurboQuant codec family, next to mirage. The block transforms,
-the block metrics, and the dead-zone quantizer come from
-`m31labs.dev/turboquant/blockdsp`.
+For local evaluation, add `replace m31labs.dev/tqwebp => /path/to/checkout`
+to a consumer module. See the changelog for unreleased changes.
 
-## Status
+## Supported scope
 
-The encoder supports opaque still images. The default is quality 75 and
-method 4. Methods 5 and 6 are experimental effort levels.
+| Capability | Behavior |
+|---|---|
+| Opaque RGB, grayscale, YCbCr, paletted, CMYK, and other `image.Image` values | Converted to BT.601 limited-range 4:2:0; nonzero bounds and subimages supported |
+| Dimensions | 1–16383 pixels on each axis; optional smaller caller limits |
+| Transparency | Rejected with `ErrAlphaUnsupported`; flatten over an explicit background if that suits the application |
+| Lossless encoding, animation, metadata | Not implemented |
+| Decoding | Not provided; use an independent WebP decoder |
+| Determinism | Integer coding, fixed search order; repeated encodes and GOMAXPROCS tests check identical bytes |
 
-- Methods 1 to 4 use whole-block luma prediction. Method 0 selects method 4.
-- Method 5 adds all ten 4x4 prediction sub-modes and a rate-distortion search.
-- Method 6 adds coefficient refinement, trellis search, and token probability
-  updates with a second analysis pass. It can lose substantial quality.
-- Loop filter tuning, production adaptive quantization, and alpha support
-  are not enabled in this release.
-
-The [real-image comparison](bench/corpuscompare/results/2026-09-23.md) covers
-12 photos, graphics, and screenshots. At cwebp q75 SSIM, method 4 needs a
-median 1.69x the bytes on six Kodak photos. Method 5 needs 1.21x. Their
-median q75 encode times are 0.61x and 1.99x the cwebp CLI time on those
-photos. These are different quality and timing comparisons; see the method
-notes. Method 6 has no shared SSIM range with cwebp on this q50 to q90 sweep.
-
-The synthetic gates below remain useful correctness checks. They do not
-establish rate or speed on real photos. Do not infer libwebp quality parity
-from equal quality labels.
+Inputs must satisfy the `image.Image` contract, including valid pixel storage.
+Quality 100 remains lossy, including chroma subsampling. Use a lossless codec
+when exact pixels or small colored text matter.
 
 ## Using it
 
 ```go
 import webp "m31labs.dev/tqwebp"
 
+// img is a decoded, opaque image.Image.
 f, err := os.Create("photo.webp")
 if err != nil {
-	return err
+    return err
 }
-defer f.Close()
 if err := webp.Encode(f, img, &webp.Options{Quality: 80}); err != nil {
-	return err
+    f.Close()
+    return err
 }
+return f.Close() // surface a final filesystem write error too
 ```
 
-The interface mirrors `image/jpeg`. A nil `*Options`, and the zero value,
-both mean quality 75 and method 4. Quality selects an encoder setting,
-not a target PSNR, SSIM, or output size.
+Nil options and `Options{}` select quality 75 and method 4. Quality accepts
+1–100; zero selects the default. Quality is an encoder setting, not a target
+size or a promise to match cwebp's quality number. Method zero selects the
+default, so it does not select a separate fastest mode.
 
-For untrusted image sizes or output budgets, `EncodeWithLimits` adds an
-explicit resource boundary without changing the default `Encode` behavior:
+| Method | Intended use and tradeoff |
+|---|---|
+| 1–4 | Stable, identical whole-block path; default 4 is suitable for online encoding when avoiding a native dependency matters |
+| 5 | Experimental 4x4 prediction and mode search; smaller files, more CPU; evaluate on your own assets |
+| 6 | Experimental coefficient search, trellis, and probability updates; improved compression, substantially more CPU and allocations |
+
+The method 6 quality collapse present at `9c4604b` is corrected by separating
+coefficient refinement's rate weight from mode selection's weight. A higher
+method still need not improve every image's quality at an equal quality setting.
+Loop filtering and production adaptive quantization remain disabled.
+
+See the [compiled examples](example_test.go), including deliberate alpha
+flattening and resource limits.
+
+## Resource limits and errors
 
 ```go
 err := webp.EncodeWithLimits(w, img, nil, webp.Limits{
-	MaxWidth:       4096,
-	MaxHeight:      4096,
-	MaxPixels:      16 << 20,
-	MaxOutputBytes: 8 << 20,
+    MaxWidth:       4096,
+    MaxHeight:      4096,
+    MaxPixels:      16 << 20,
+    MaxOutputBytes: 8 << 20,
 })
 ```
 
-Every limit is optional: zero means unlimited, while a negative value is
-invalid and returns `ErrInvalidLimits`. Width and height apply to the
-visible `image.Bounds`; `MaxPixels` applies to their product before padded
-macroblocks are allocated. The built-in VP8 dimension limit still applies
-when the corresponding dimension limit is zero. `MaxOutputBytes` includes
-the complete RIFF file. The file is serialized before that cap is checked,
-so an output-cap refusal returns `ErrOutputTooLarge` (and
-`ErrLimitExceeded` via `errors.Is`) without writing a partial file.
+Zero limit fields mean no caller limit; negative fields return
+`ErrInvalidLimits`. Width, height, and visible pixel count are checked before
+reading pixels or allocating padded planes. Choose a pixel limit appropriate
+to your deployment: `Encode` alone permits very large, expensive images.
 
-Methods 5 and 6 use the implemented rate-distortion search. Higher method
-values do not guarantee better quality at the same quality setting. Keep
-method 4 for the stable effort path. Evaluate method 5 on your own inputs.
-Use method 6 only for experiments until its quality regressions are resolved.
+`MaxOutputBytes` limits the complete file **after serialization**. It is not
+a memory or CPU cap. The encoder holds padded source/reconstruction planes,
+macroblock records, and encoded data; method 6 runs a second analysis pass.
+An output-cap refusal writes nothing and matches both `ErrOutputTooLarge`
+and `ErrLimitExceeded` through `errors.Is`. Zero limits produce the same
+bytes as `Encode`.
 
-Encode returns `ErrAlphaUnsupported` for an image with a translucent pixel.
-It does not silently discard alpha. This branch does not write metadata or
-animation chunks.
+Both entry points report nil images, typed nil images, empty or inverted
+bounds as `ErrInvalidImage`; nil writers as `ErrInvalidWriter`; out-of-range
+options as `ErrInvalidOptions`; and VP8 dimension overflow as `ErrTooLarge`.
+Unsupported alpha and input/limit validation fail before any output writes.
+Writer errors are returned unchanged, and short writes return
+`io.ErrShortWrite`. A writer failure can leave a partial destination file;
+write to a temporary file and rename after success when atomic output matters.
 
-Output is deterministic: the same image and the same options always
-produce the same bytes, at every value of GOMAXPROCS.
+## Measured quality and size
 
-## Measured gates
+The [September 30 validation](bench/corpuscompare/results/2026-09-30.md)
+uses the same hash-checked 12-image corpus and independent libwebp decoder
+as the [earlier comparison](bench/corpuscompare/results/2026-09-23.md).
+At cwebp quality 75's luma SSIM, interpolated median file-size ratios are:
 
-Run every gate with one command:
+| Content | Method 4 | Method 5 | Corrected method 6 |
+|---|---:|---:|---:|
+| Six Kodak photos | 1.687× | 1.211× | 1.095× |
+| Three graphics | 2.606× | 1.235× | 1.124× |
+| Three screenshots | 2.408× | 1.430× | 1.092× |
 
-```sh
-go run ./cmd/tqbench -gates                  # verdicts and numbers
-go run ./cmd/tqbench -gates -json out.json   # the full measurements
-```
+Graphics and screenshots have only two matched images for methods 5 and 6.
+All twelve corrected method 6 curves overlap cwebp over part of the q50–90
+sweep. This is a small, three-point diagnostic comparison, not universal
+parity evidence. Method 6 took about five times method 5's photo CPU time
+on this shared host. Timings and allocation volume are descriptive; see the
+raw measurements and method notes. Default method 4's files are larger.
 
-| Gate | Bar | Measured | Verdict |
-|---|---|---|---|
-| G1 correctness | every image round-trips, and the decode equals the encoder's own picture | 63 of 63 encodes exact | PASS |
-| G2 rate against stdlib JPEG q82 | median bytes at most 0.90x, no image over 1.10x | median 0.741, worst 0.760 | PASS |
-| G2b quality curve | median gain 2.5 dB from q75 to q90, for at most 2.2x the bytes | gain 5.00 dB, bytes 9.60x | see below |
-| G3 speed | reported, no bar | 23 ms per megapixel, single thread, no assembly | reported |
-| G3 rate against libwebp q75 | informative, at most 1.35x | median 1.170x | reported |
-| G4b against deepteams/webp | gated at WP-2 | photos -0.14 dB at the same file size | reported |
+All 144 outputs in that sweep decoded through `dwebp`, including all 108
+tqwebp outputs. Automated tests also check exact reconstruction through
+`golang.org/x/image/vp8`. Current browser validation was unavailable because
+the installed Chrome executable could not be run. Browser decoding on an
+earlier revision is recorded in the historical report.
 
-G2b's decibel clause passes with margin. Its byte-ratio clause fails, and
-the run reports it rather than gating on it. The reason is the corpus, not
-the encoder: the generated photo images carry per-pixel noise, which puts
-a rate wall between quality 75 and quality 90 that no encoder can cross
-cheaply. libwebp, measured on the same images, needs 7.06 times the bytes
-for its own 4.42 dB. Vendoring the real photo corpus of specification
-section 10.1 re-arms the clause; `-strict` gates it that day.
+## Color convention
 
-## The colour convention
+WebP uses BT.601 limited-range YUV. tqwebp's forward conversion is pinned
+against libwebp fixtures in `testdata/golden/bt601/`. The current
+`golang.org/x/image/webp` decoder converts those planes with full-range JFIF
+coefficients, which can shift displayed RGB values. The test-only
+`oracle.DecodeWebP` uses the matching BT.601 inverse for cross-codec scoring.
+Do not infer a color-conversion defect from comparing those two RGB decodes.
 
-A lossy WebP file carries BT.601 limited-range planes, and libwebp,
-therefore every browser, inverts them with the matching coefficients.
-`golang.org/x/image` inverts them with the full-range JFIF coefficients
-instead, which moves red, green, and blue by up to 20 per channel.
-
-tqwebp converts forward with libwebp's coefficients, and this repository
-measures through `oracle.DecodeWebP`, which inverts with them too. Both
-directions are pinned against libwebp's own files under
-`testdata/golden/bt601/`, and `testdata/golden/libwebp_differential.json`
-records what libwebp reports for every file tqwebp writes.
-
-## The corpus
-
-`internal/corpus` generates every image in `testdata/corpus/` from a
-fixed, self-contained pseudo-random seed. Run `go generate ./...` from the
-module root and the corpus reproduces byte for byte. It covers three
-content classes plus two correctness edge cases:
-
-| Image | Class | Size | Note |
-|---|---|---|---|
-| `photo_gradient_wide` | photo | 1200x800 | smooth gradient + detail + noise |
-| `photo_texture_detail` | photo | 1024x768 | denser structured detail |
-| `photo_noise_detail` | photo | 1280x800 | third seed/palette variant |
-| `screenshot_dashboard` | screenshot | 1200x800 | panels, hard edges, dash "text" |
-| `screenshot_panel_grid` | screenshot | 1024x768 | denser panel grid |
-| `flatart_quadrant` | flat | 1200x800 | large solid regions |
-| `flatart_logo_blocks` | flat | 640x480 | smaller solid-region variant |
-| `edge_small_64` | photo | 64x64 | below one macroblock row in most dimensions |
-| `edge_prime_dims` | screenshot | 641x487 | prime width and height: no 16px macroblock alignment |
-
-## The oracle
-
-`oracle` decodes every encoder's output through `golang.org/x/image/webp`
-— an independent, pure-Go decoder — and scores it against the source:
-
-- `DecodeWebP` / `WebPPlanesToRGBA`: decode with libwebp's colour
-  convention. Every cross-codec measurement goes through it.
-- `MeasurePSNR`: per-channel PSNR after that decode. Use it to compare
-  two codecs.
-- `MeasurePlanePSNR`: PSNR in the codec's own plane domain. Use it to ask
-  about the codec alone, such as the shape of its quality curve. Do not
-  use it across codecs with different sample ranges.
-- `MeasureSSIM`: windowed (8x8) luma structural similarity.
-- `ReconstructionSource` / `CompareExact`: the exact-match gate.
-- `Table`: a stable, sorted text-table report.
-
-`oracle`, and its `golang.org/x/image` dependency, are development and
-test code. The encoder's own import graph carries neither; CI proves that
-on every run with `go list -deps`.
-
-## The baselines
-
-`cmd/tqbench` measures stdlib `image/jpeg` at quality 75, 82, and 90 and
-writes `testdata/golden/jpeg_baseline.txt`; `baseline_test.go` fails when
-that table drifts.
-
-`tools/libwebp_baseline.py` measures libwebp itself through Pillow and
-writes `testdata/golden/libwebp_baseline.json`. It also decodes tqwebp's
-own files with libwebp, which is the differential check of specification
-section 11.3.
-
-`bench/deepteams/` measures `github.com/deepteams/webp` from its own Go
-module, so that dependency never reaches this module's `go.mod`.
-
-## Regenerating derived files
-
-```sh
-go generate ./...                          # corpus, colour fixture source, JPEG table
-cd bench/deepteams && go generate ./...    # deepteams table
-python3 tools/libwebp_baseline.py          # libwebp fixture (needs Pillow with WebP)
-```
-
-## Building and testing
+## Development and validation
 
 ```sh
 go build ./...
 go vet ./...
-go test ./...
-go test -race ./...
-gofmt -l .
+go test -count=1 ./...
+go test -race -count=1 ./...
+GOMAXPROCS=2 go test . -run '^$' -fuzz '^FuzzEncodeAPI$' -fuzztime=30s
+GOMAXPROCS=2 go test ./internal/encoder -run '^$' -fuzz '^FuzzEncode$' -fuzztime=30s
+go run ./cmd/tqbench -gates
 ```
 
-## Claims this project makes, and does not make
+CI checks correctness, bounded quality regressions, examples, race tests,
+short fuzz runs, and six target builds: Linux amd64/arm64, macOS arm64,
+Windows amd64, js/wasm, and wasip1/wasm. See
+[bench/corpuscompare](bench/corpuscompare/README.md) for the real-image
+measurement and acceptance commands. External corpus images are supplied
+locally; CI's generated fixtures do not establish real-photo parity.
 
-Permitted, because they are true and checked: lossy WebP encoder in pure
-Go; zero cgo and zero WebAssembly runtime; deterministic output; every
-release gate decodes each frame through `golang.org/x/image/webp`
-in-process; a drop-in `image/jpeg`-shaped interface.
-
-Not permitted: "first", "only", or "fastest". `deepteams/webp` exists, it
-works, and at the same file size it still leads tqwebp on text and flat
-art.
+The production import graph includes the standard library and
+`m31labs.dev/turboquant/blockdsp`. `oracle`, `golang.org/x/image`, CGo
+competitors, and Python measurement tools are development dependencies.
+CI checks this separation. `go generate ./...` regenerates the deterministic
+corpus, color fixture source, and JPEG baseline; external libwebp fixtures
+use `tools/libwebp_baseline.py`.
 
 ## License
 
-MIT. See `LICENSE`.
+MIT. See [LICENSE](LICENSE).

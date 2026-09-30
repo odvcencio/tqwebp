@@ -18,9 +18,9 @@ import (
 )
 
 // MaxPayload is the largest VP8 payload the container can carry. The RIFF
-// size field holds 32 bits, and the header before the payload takes 12 of
-// them.
-const MaxPayload = 1<<32 - 1 - 12
+// size field holds 32 bits. The chunk and format headers use 12 bytes;
+// an odd payload needs a pad byte, so the largest fitting payload is even.
+const MaxPayload = 1<<32 - 1 - 13
 
 // WriteSimpleLossy writes payload, a VP8 key frame, to w inside a RIFF
 // WebP container.
@@ -36,14 +36,14 @@ func WriteSimpleLossy(w io.Writer, payload []byte) error {
 	copy(header[12:16], "VP8 ")
 	binary.LittleEndian.PutUint32(header[16:20], uint32(len(payload)))
 
-	if _, err := w.Write(header[:]); err != nil {
+	if err := write(w, header[:]); err != nil {
 		return err
 	}
-	if _, err := w.Write(payload); err != nil {
+	if err := write(w, payload); err != nil {
 		return err
 	}
 	if pad == 1 {
-		if _, err := w.Write([]byte{0}); err != nil {
+		if err := write(w, []byte{0}); err != nil {
 			return err
 		}
 	}
@@ -54,4 +54,15 @@ func WriteSimpleLossy(w io.Writer, payload []byte) error {
 // payload of the given length.
 func Size(payloadLen int) int {
 	return 12 + 8 + payloadLen + payloadLen&1
+}
+
+func write(w io.Writer, p []byte) error {
+	n, err := w.Write(p)
+	if err != nil {
+		return err
+	}
+	if n != len(p) {
+		return io.ErrShortWrite
+	}
+	return nil
 }

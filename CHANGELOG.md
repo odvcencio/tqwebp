@@ -1,5 +1,18 @@
 # Changelog
 
+
+## Unreleased
+
+- Separate Method 6 coefficient-refinement weighting from prediction-mode
+  weighting, correcting the real-image quality collapse. Methods below 6
+  keep their encoded bytes. Add generated and real-corpus quality guards.
+- Share public preflight validation, reject nil images/writers and invalid
+  bounds, and check dimensions without signed overflow.
+- Return `io.ErrShortWrite` for truncated RIFF/header/payload/padding writes;
+  retain original writer errors. Fix the RIFF maximum payload/padding bound.
+- Add image-mode/subimage coverage, compiled examples, public API fuzzing,
+  CI race/fuzz smoke checks, and measured capability/resource documentation.
+
 All notable changes to tqwebp are documented in this file.
 
 ## Unreleased: work package 2 — better modes

@@ -216,7 +216,7 @@ func TestCoeffWinnerIsIndependentArgmin(t *testing.T) {
 				}
 			}
 			rate := cost.BlockCost(token.YWithDC, ctx, 0, levels, &token.DefaultProbs)
-			return sse<<8 + int64(rate)*enc.lambda
+			return sse<<8 + int64(rate)*enc.coefficientLambda()
 		}
 
 		winner := lumaLevels[b]
@@ -378,7 +378,7 @@ func TestCoeffTrellisMethod6Bounds(t *testing.T) {
 		wantChange bool // proven fixture must displace a winner
 	}{
 		{"mixed q75", bpredMixedRGBA(48, 32, 77), 75, false},
-		{"detail q90", bpredDetailRGBA(64, 48, 101), 90, true},
+		{"detail q90", bpredDetailRGBA(128, 96, 101), 90, true},
 	} {
 		t.Run(spec.name, func(t *testing.T) {
 			_, m5 := encodeMethod(t, spec.img, Config{Quality: spec.q, Method: 5})

@@ -16,7 +16,9 @@ package encoder
 //
 //	distortion(candidate)*256 + lambda * exactSyntaxRate
 //
-// where rate is cost.BlockCost under the block's entering neighbour
+// lambda is the separate coefficientLambda calibration, not the mode-
+// selection weight. The objective retains the same fixed-point units.
+// Rate is cost.BlockCost under the block's entering neighbour
 // context and distortion comes from a caller-supplied callback that
 // rebuilds exactly what a decoder would: scan levels to raster order,
 // dequantization with the frame's Y1 factors, inverse transform, add to
@@ -121,7 +123,8 @@ func (e *encoder) refineBlockLevels(ctx int, levels *[16]int16, dist spatialDist
 
 func (e *encoder) refineBlockLevelsWithProbs(ctx int, levels *[16]int16, dist spatialDistortionFn, probs *token.Probs) ([16]int16, coeffSearchStats) {
 	retained := *levels
-	winner, stats := searchCoeffCandidatesWithProbs(token.YWithDC, ctx, 0, probs, levels, e.lambda, dist)
+	lambda := e.coefficientLambda()
+	winner, stats := searchCoeffCandidatesWithProbs(token.YWithDC, ctx, 0, probs, levels, lambda, dist)
 	e.rd.CoeffBlocksSearched++
 	e.rd.CoeffCandidatesScored += int64(stats.CandidatesScored)
 	if stats.Improved {
@@ -130,7 +133,7 @@ func (e *encoder) refineBlockLevelsWithProbs(ctx int, levels *[16]int16, dist sp
 	if e.coeffTrellisAllowed() {
 		s5b := winner
 		final, tstats := runCoeffTrellisWithProbs(trellisWholeScan, token.YWithDC, ctx, &retained,
-			e.lambda, dist, probs, retained, s5b)
+			lambda, dist, probs, retained, s5b)
 		if final != s5b {
 			e.rd.TrellisBlocksChanged++
 		}
@@ -141,4 +144,15 @@ func (e *encoder) refineBlockLevelsWithProbs(ctx int, levels *[16]int16, dist sp
 		stats.BestScore = tstats.BestScore
 	}
 	return winner, stats
+}
+
+// coefficientLambda keeps the coefficient search close to the quality set by
+// the quantizer. The mode-selection slope is too aggressive for freely
+// discarding coefficients: real-image ablations isolated that reuse as the
+// Method 6 quality collapse. This separate, conservative calibration was
+// measured at qualities 50, 75, and 90; it is not a perceptual guarantee.
+// Derive it from immutable frame settings so probability reconsideration
+// uses exactly the same coefficient weight on both passes.
+func (e *encoder) coefficientLambda() int64 {
+	return (e.lambda + 32) / 64
 }

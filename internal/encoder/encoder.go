@@ -107,8 +107,8 @@ type encoder struct {
 	subCtxAbove [][4]predict.SubMode
 
 	// lambda is the integer rate-distortion slope of cost.Lambda for
-	// this frame's quantizer. Only the WP-2 slice 4 search of
-	// rd_select.go consumes it; earlier paths never read it.
+	// this frame's quantizer. rd_select.go uses it for mode selection;
+	// coefficientLambda derives a separate coefficient-refinement slope.
 	lambda int64
 
 	// rd accumulates the deterministic candidate and decision counters

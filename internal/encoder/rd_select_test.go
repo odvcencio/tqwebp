@@ -735,7 +735,7 @@ func (o *rdOracle) scoreBPred(mbx, mby int, src []uint8, tok *rdTokenView) (rdCa
 				}
 				return blockSSE
 			}
-			winner, _ := searchCoeffCandidates(token.YWithDC, ctx, 0, &lumaLevels[b], e.lambda, dist)
+			winner, _ := searchCoeffCandidates(token.YWithDC, ctx, 0, &lumaLevels[b], e.coefficientLambda(), dist)
 			lumaLevels[b] = winner
 		}
 

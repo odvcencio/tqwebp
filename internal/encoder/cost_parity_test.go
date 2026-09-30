@@ -575,13 +575,24 @@ func replayChromaPlaneBlocks(t *testing.T, tokens *acc, dec *boolenc.Decoder, mb
 // macroblocks, and skipped ones share the picture.
 func TestCostModelMatchesEmittedSyntaxMixed(t *testing.T) {
 	img := bpredMixedRGBA(48, 32, 77)
-	enc, data, selected, err := encodeWithMethod(img, Config{Quality: 60, Method: 6})
-	if err != nil {
-		t.Fatalf("encode: %v", err)
+	enc := newEncoder(yuv.Convert(img), Config{Quality: 60, Method: 6})
+	enc.rdProbOptOff = true // the replay below parses default probabilities
+	enc.runFrame()
+	selected := 0
+	for _, mb := range enc.mbs {
+		if mb.bpred {
+			selected++
+		}
 	}
+	var buf byteWriter
+	if err := enc.writeFile(&buf); err != nil {
+		t.Fatal(err)
+	}
+	data := buf.data
 	if selected == 0 || selected == len(enc.mbs) {
 		t.Fatalf("fixture lost its mix: %d of %d macroblocks selected", selected, len(enc.mbs))
 	}
+
 	replayFrame(t, enc, data)
 }
 

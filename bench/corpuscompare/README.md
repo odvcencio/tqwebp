@@ -66,3 +66,24 @@ The corpus has six Kodak photos, three graphics or cutouts, and three Chrome
 screenshots. It is a small diagnostic corpus. It cannot establish universal
 quality or speed claims. The rose cutout has photographic texture. Broader
 release gates need more portraits, line art, small text, and alpha masks.
+
+
+## Method 6 regression acceptance
+
+After measuring `tq5 tq6 cwebp`, check the complete tq5/tq6 q50, q75, and q90
+sweep against a bounded quality-loss budget:
+
+```sh
+python3 check_acceptance.py out/run1/metrics.jsonl --manifest results/corpus-2026-09-23.json
+python3 -m unittest test_rate.py test_acceptance.py
+```
+
+The gate refuses missing or duplicate cases and invalid measurements. For
+each image and quality it permits at most .005 luma SSIM or .5 dB luma PSNR
+loss from method 5. This catches the earlier coefficient-refinement collapse;
+it does not establish a rate, speed, or universal quality guarantee. The
+historical method 6 measurements fail it; the
+[corrected measurements](results/2026-09-30.md) pass all 36 comparisons.
+CI runs the gate's self-tests and smaller generated-image quality guards.
+The real-image sweep remains an explicit local acceptance run using supplied,
+hash-verified PNGs and `dwebp`.

@@ -12,13 +12,11 @@ import (
 type Config struct {
 	// Quality runs from 1, the smallest file, to 100, the best picture.
 	Quality int
-	// Method runs from 0 to 6. Methods 0 to 4 share one effort level:
-	// every macroblock's luma uses a whole-block prediction mode. At
-	// Method 5 and 6 the encoder additionally runs a conservative
-	// detailed-block pass that may code a macroblock's luma as sixteen
-	// 4x4 blocks when its sum-of-squares error is clearly below half
-	// of the whole-block error. The rule prices squared error only,
-	// not bits; it is not a rate-distortion search.
+	// Methods below 5 use whole-block prediction. Method 5 adds 4x4
+	// prediction and rate-distortion mode selection. Method 6 also refines
+	// coefficients with a separately calibrated weight and reconsiders
+	// analysis under optimized token probabilities. Public Method 0 is
+	// normalized to the default before this internal entry point.
 	Method int
 }
 
