@@ -1,0 +1,197 @@
+--- upstream/vp8/decode.go
++++ internal/vp8decode/decode.go
+@@ -5,11 +5,12 @@
+ // Package vp8 implements a decoder for the VP8 lossy image format.
+ //
+ // The VP8 specification is RFC 6386.
+-package vp8 // import "golang.org/x/image/vp8"
++package vp8
+ 
+ // This file implements the top-level decoding algorithm.
+ 
+ import (
++	"context"
+ 	"errors"
+ 	"image"
+ 	"io"
+@@ -17,8 +18,9 @@
+ 
+ // limitReader wraps an io.Reader to read at most n bytes from it.
+ type limitReader struct {
+-	r io.Reader
+-	n int
++	r   io.Reader
++	n   int
++	ctx context.Context
+ }
+ 
+ // ReadFull reads exactly len(p) bytes into p.
+@@ -26,9 +28,51 @@
+ 	if len(p) > r.n {
+ 		return io.ErrUnexpectedEOF
+ 	}
+-	n, err := io.ReadFull(r.r, p)
+-	r.n -= n
+-	return err
++	empty, total := 0, 0
++	for len(p) > 0 {
++		if r.ctx != nil {
++			if err := r.ctx.Err(); err != nil {
++				return err
++			}
++		}
++		size := len(p)
++		if size > 4096 {
++			size = 4096
++		}
++		n, err := r.r.Read(p[:size])
++		if n < 0 || n > size {
++			return errors.New("vp8: invalid reader count")
++		}
++		r.n -= n
++		total += n
++		p = p[n:]
++		if r.ctx != nil {
++			if cancel := r.ctx.Err(); cancel != nil {
++				return cancel
++			}
++		}
++		if err != nil && err != io.EOF {
++			return err
++		}
++		if len(p) == 0 {
++			return nil
++		}
++		if err != nil {
++			if err == io.EOF && total > 0 {
++				return io.ErrUnexpectedEOF
++			}
++			return err
++		}
++		if n == 0 {
++			empty++
++			if empty >= 100 {
++				return io.ErrNoProgress
++			}
++		} else {
++			empty = 0
++		}
++	}
++	return nil
+ }
+ 
+ // FrameHeader is a frame header, as specified in section 9.1.
+@@ -93,6 +137,7 @@
+ // calling Init, DecodeFrameHeader and then DecodeFrame in that order.
+ // A Decoder can be re-used to decode multiple frames.
+ type Decoder struct {
++	ctx context.Context
+ 	// r is the input bitsream.
+ 	r limitReader
+ 	// scratch is a scratch buffer.
+@@ -153,7 +198,7 @@
+ 
+ // Init initializes the decoder to read at most n bytes from r.
+ func (d *Decoder) Init(r io.Reader, n int) {
+-	d.r = limitReader{r, n}
++	d.r = limitReader{r: r, n: n}
+ }
+ 
+ // DecodeFrameHeader decodes the frame header.
+@@ -323,6 +368,9 @@
+ // parseOtherHeaders parses header information other than the frame header.
+ func (d *Decoder) parseOtherHeaders() error {
+ 	// Initialize and parse the first partition.
++	if int64(d.frameHeader.FirstPartitionLen) > int64(d.r.n) {
++		return io.ErrUnexpectedEOF
++	}
+ 	firstPartition := make([]byte, d.frameHeader.FirstPartitionLen)
+ 	if err := d.r.ReadFull(firstPartition); err != nil {
+ 		return err
+@@ -361,7 +409,12 @@
+ 
+ // DecodeFrame decodes the frame and returns it as an YCbCr image.
+ // The image's contents are valid up until the next call to Decoder.Init.
+-func (d *Decoder) DecodeFrame() (*image.YCbCr, error) {
++func (d *Decoder) DecodeFrame(ctx context.Context) (*image.YCbCr, error) {
++	d.ctx = ctx
++	d.r.ctx = ctx
++	if err := ctx.Err(); err != nil {
++		return nil, err
++	}
+ 	d.ensureImg()
+ 	if err := d.parseOtherHeaders(); err != nil {
+ 		return nil, err
+@@ -373,6 +426,9 @@
+ 	for mby := 0; mby < d.mbh; mby++ {
+ 		d.leftMB = mb{}
+ 		for mbx := 0; mbx < d.mbw; mbx++ {
++			if err := ctx.Err(); err != nil {
++				return nil, err
++			}
+ 			skip := d.reconstruct(mbx, mby)
+ 			fs := d.filterParams[d.segment][btou(!d.usePredY16)]
+ 			fs.inner = fs.inner || !skip
+@@ -394,10 +450,17 @@
+ 	// frame header level or macroblock override level is 0".
+ 	if d.filterHeader.level != 0 {
+ 		if d.filterHeader.simple {
+-			d.simpleFilter()
++			if err := d.simpleFilter(); err != nil {
++				return nil, err
++			}
+ 		} else {
+-			d.normalFilter()
+-		}
++			if err := d.normalFilter(); err != nil {
++				return nil, err
++			}
++		}
++	}
++	if err := ctx.Err(); err != nil {
++		return nil, err
+ 	}
+ 	return d.img, nil
+ }
+--- upstream/vp8/filter.go
++++ internal/vp8decode/filter.go
+@@ -78,9 +78,12 @@
+ }
+ 
+ // simpleFilter implements the simple filter, as specified in section 15.2.
+-func (d *Decoder) simpleFilter() {
++func (d *Decoder) simpleFilter() error {
+ 	for mby := 0; mby < d.mbh; mby++ {
+ 		for mbx := 0; mbx < d.mbw; mbx++ {
++			if err := d.ctx.Err(); err != nil {
++				return err
++			}
+ 			f := d.perMBFilterParams[d.mbw*mby+mbx]
+ 			if f.level == 0 {
+ 				continue
+@@ -105,12 +108,16 @@
+ 			}
+ 		}
+ 	}
++	return nil
+ }
+ 
+ // normalFilter implements the normal filter, as specified in section 15.3.
+-func (d *Decoder) normalFilter() {
++func (d *Decoder) normalFilter() error {
+ 	for mby := 0; mby < d.mbh; mby++ {
+ 		for mbx := 0; mbx < d.mbw; mbx++ {
++			if err := d.ctx.Err(); err != nil {
++				return err
++			}
+ 			f := d.perMBFilterParams[d.mbw*mby+mbx]
+ 			if f.level == 0 {
+ 				continue
+@@ -144,6 +151,7 @@
+ 			}
+ 		}
+ 	}
++	return nil
+ }
+ 
+ // filterParam holds the loop filter parameters for a macroblock.

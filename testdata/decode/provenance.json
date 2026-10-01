@@ -1,0 +1,102 @@
+{
+  "libwebp_version": "0x10500",
+  "oracle_mode": "MODE_RGBA, no_fancy_upsampling=1, bypass_filtering=0, dithering=0, alpha_dithering=0",
+  "fixtures": [
+    {
+      "file": "blue-purple-pink.lossy.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/blue-purple-pink.lossy.webp",
+      "width": 150,
+      "height": 100,
+      "sha256": "af8e87f21fa9fcb8e74c12d31d61a56b1d8e06819038efd10119b0f0726bfab4",
+      "rgba_sha256": "d1288306922ec13bf6c427916598b7e82d7197b8f3d640ab924c9d2057f38fe2"
+    },
+    {
+      "file": "blue-purple-pink-large.no-filter.lossy.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/blue-purple-pink-large.no-filter.lossy.webp",
+      "width": 600,
+      "height": 400,
+      "sha256": "30a55c266868822693c9b1af5c555fb5f4499899ecaeea165e5a01c4d8012f1e",
+      "rgba_sha256": "f71b0c0fc10befe9d1ef920f1d6b5523828b003735fb051e7f85b002827d9686"
+    },
+    {
+      "file": "blue-purple-pink-large.normal-filter.lossy.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/blue-purple-pink-large.normal-filter.lossy.webp",
+      "width": 600,
+      "height": 400,
+      "sha256": "8a94f72b544bf9ceda017e32f80513a1949f7d05101d67aaf70fd52390331d76",
+      "rgba_sha256": "56cea7b7823f7870beb21a2b2b7f82d83c4459823401930e396de56f53b4e00a"
+    },
+    {
+      "file": "blue-purple-pink-large.simple-filter.lossy.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/blue-purple-pink-large.simple-filter.lossy.webp",
+      "width": 600,
+      "height": 400,
+      "sha256": "9ce12708a08266a1f83fe1865ef0de6f71a897d1a5ccb2840a58d5abdf2bd574",
+      "rgba_sha256": "8f51323d84e88a6200341ea6e3c9a68fdda9e2bab478fea7d6057a9545e25d20"
+    },
+    {
+      "file": "pattern-1x1.webp",
+      "source": "libwebp WebPEncodeRGBA quality 83; deterministic procedural pattern in this script",
+      "width": 1,
+      "height": 1,
+      "sha256": "0c0bc26b8b3fa5a1350214e7c77456cd5981d4ec924daa4b47f4ae2a7cde7b15",
+      "rgba_sha256": "e3820096cb82366b860b8a4e668453a7aaaf423af03bdf289fa308ea03a79332"
+    },
+    {
+      "file": "pattern-1x17.webp",
+      "source": "libwebp WebPEncodeRGBA quality 83; deterministic procedural pattern in this script",
+      "width": 1,
+      "height": 17,
+      "sha256": "4c89d4270e71c45f230e774f17c03304321049bf251416424d3e315c08cd68b5",
+      "rgba_sha256": "deb28ee32f132b889ec27f40a3fd642a45d4ed9e8b031c1356fc1af286084613"
+    },
+    {
+      "file": "pattern-17x1.webp",
+      "source": "libwebp WebPEncodeRGBA quality 83; deterministic procedural pattern in this script",
+      "width": 17,
+      "height": 1,
+      "sha256": "5dc141e8a06bcfa7beec607d2eae9c4f227cc701d961cc296a62a091f08399e0",
+      "rgba_sha256": "e770dadb241735775837a4d9414e33b2d9706e2ac2d120e9691e10091700cd65"
+    },
+    {
+      "file": "pattern-19x17.webp",
+      "source": "libwebp WebPEncodeRGBA quality 83; deterministic procedural pattern in this script",
+      "width": 19,
+      "height": 17,
+      "sha256": "1a1833ae9aaf21d1af4c57ed111fa7bd1e51796824507f248a7b9772405f94ff",
+      "rgba_sha256": "9dad8cc42f0b2918e36b78a7618a123c862e01cc371a0dc4d466febe9ab1b66a"
+    },
+    {
+      "file": "alpha-filter-0.webp",
+      "source": "Independent procedural ALPH residuals + libwebp color payload; oracle validates filters",
+      "width": 19,
+      "height": 17,
+      "sha256": "9b33dd9d392cbee603958b005ac2a83d5f80f26e9c1cc741f408b321d5ec2fa6",
+      "rgba_sha256": "5eb6fb179a227bfd756443980cac3f89371c62b58828be10e7789a831bb221d2"
+    },
+    {
+      "file": "alpha-filter-1.webp",
+      "source": "Independent procedural ALPH residuals + libwebp color payload; oracle validates filters",
+      "width": 19,
+      "height": 17,
+      "sha256": "21543f95d621e3df717d54677b7911dc0d167401fdc88fe5695002951c76a236",
+      "rgba_sha256": "5eb6fb179a227bfd756443980cac3f89371c62b58828be10e7789a831bb221d2"
+    },
+    {
+      "file": "alpha-filter-2.webp",
+      "source": "Independent procedural ALPH residuals + libwebp color payload; oracle validates filters",
+      "width": 19,
+      "height": 17,
+      "sha256": "5c4ac341cb7d390a8cde78ec1215c0bbe34a97fb80bcc796a30d48eea281fcbf",
+      "rgba_sha256": "5eb6fb179a227bfd756443980cac3f89371c62b58828be10e7789a831bb221d2"
+    },
+    {
+      "file": "alpha-filter-3.webp",
+      "source": "Independent procedural ALPH residuals + libwebp color payload; oracle validates filters",
+      "width": 19,
+      "height": 17,
+      "sha256": "15070a254e5f656ca8d93fb07d5860830311e472baf3e40348ba5b43d282a28e",
+      "rgba_sha256": "5eb6fb179a227bfd756443980cac3f89371c62b58828be10e7789a831bb221d2"
+    }
+  ]
+}
