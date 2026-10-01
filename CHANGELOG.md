@@ -3,6 +3,15 @@
 
 ## Unreleased
 
+- Add an experimental public still `container` Demux/Mux foundation with bounded
+  RIFF/VP8X/header checks, owned opaque metadata and compressed-payload-preserving
+  edits. Preserve duplicate metadata and explicitly retained unknown chunks.
+- Add root `Metadata` alias; the pixel encoder remains unchanged. Animation
+  controls are present in the planned container model but explicitly unsupported;
+  complete native pixel decoding and animation remain required follow-on work.
+- Add structural fuzzing, malformed-input/budget/cancellation regressions and
+  independent VP8/VP8L fixture remux checks.
+
 - Add `EncodeContext` for cooperative cancellation without changing existing
   `Options`, `Limits`, defaults or encoder decisions. Preserve preflight error
   precedence; a pre-cancelled context touches no image/writer callbacks.

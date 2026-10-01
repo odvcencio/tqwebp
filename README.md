@@ -19,11 +19,12 @@ to a consumer module. See the changelog for unreleased changes.
 | Opaque RGB, grayscale, YCbCr, paletted, CMYK, and other `image.Image` values | Converted to BT.601 limited-range 4:2:0; nonzero bounds and subimages supported |
 | Dimensions | 1–16383 pixels on each axis; optional smaller caller limits |
 | Transparency | Rejected with `ErrAlphaUnsupported`; flatten over an explicit background if that suits the application |
-| Lossless encoding, animation, metadata | Not implemented |
+| ICC/EXIF/XMP container transport/editing | Experimental still-only Demux/Mux; see [contract](docs/container.md) |
+| Lossless encoding, animation | Not implemented |
 | Decoding | Not provided; use an independent WebP decoder |
 | Determinism | Integer coding, fixed search order; repeated encodes and GOMAXPROCS tests check identical bytes |
 
-Animation, ICC/EXIF/XMP metadata and complete VP8/VP8L decoding remain required
+Animation, document metadata workflows and complete VP8/VP8L decoding remain required
 toolkit milestones. This branch is still an opaque lossy encoder. See the
 [API compatibility contract](docs/api.md) for the supported foundation.
 
@@ -185,3 +186,10 @@ use `tools/libwebp_baseline.py`.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Container and metadata foundation
+
+The separate [`container` package](docs/container.md) supports bounded still-WebP
+inspection and ICC/EXIF/XMP edits without recompressing payloads. It is structural
+transport, not pixel decoding; native VP8/VP8L decoding and animation remain
+required work. The existing pixel encoder and its defaults are unchanged.
