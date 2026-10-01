@@ -19,14 +19,16 @@ to a consumer module. See the changelog for unreleased changes.
 | Opaque RGB, grayscale, YCbCr, paletted, CMYK, and other `image.Image` values | Converted to BT.601 limited-range 4:2:0; nonzero bounds and subimages supported |
 | Encoding dimensions | 1–16383 pixels on each axis; optional smaller caller limits |
 | Transparent encoding | Rejected with `ErrAlphaUnsupported`; flatten over an explicit background if that suits the application |
-| ICC/EXIF/XMP container transport/editing | Experimental still-only Demux/Mux; see [contract](docs/container.md) |
-| Lossless encoding, animation | Not implemented |
-| Decoding | Native VP8/VP8L stills + raw/compressed ALPH; NRGBA, exact lossless channels, nearest chroma for VP8. Composed animation remains required work; see [decoding limits](docs/decoding.md) |
+| ICC/EXIF/XMP container transport/editing | Experimental still/animated Demux/Mux; see [contract](docs/container.md) |
+| Lossless/transparent pixel encoding, animation pixel encoding | Not implemented |
+| Decoding | Native VP8/VP8L stills + raw/compressed ALPH; NRGBA, exact lossless channels, nearest chroma for VP8. Bounded Reader/DecodeAll animation composition; see [animation](docs/animation.md) and [decoding limits](docs/decoding.md) |
 | Determinism | Integer coding, fixed search order; repeated encodes and GOMAXPROCS tests check identical bytes |
 
-Animation, document metadata workflows and full decoder qualification remain required
-toolkit milestones. The encoder is still opaque/lossy; native still decoding now
-accepts both codec families and raw/compressed alpha. See the
+Animation composition and owned document decoding are available through
+Reader/DecodeAll. Transparent and animation pixel encoding, CLI workflows and
+full decoder/browser qualification remain required milestones. The encoder is
+still opaque/lossy; still decoding accepts both codec families and raw/compressed
+alpha. See the
 [API compatibility contract](docs/api.md) for the supported foundation.
 
 Inputs must satisfy the `image.Image` contract, including valid pixel storage.
@@ -193,17 +195,18 @@ conversion constants retain the notice under [third_party](third_party/libwebp-C
 
 ## Container and metadata foundation
 
-The separate [`container` package](docs/container.md) supports bounded still-WebP
+The separate [`container` package](docs/container.md) supports bounded still/animated-WebP
 inspection and ICC/EXIF/XMP edits without recompressing payloads. It is structural
 transport, not pixel decoding. Root native VP8/VP8L still decoding is now
-available; animation and full decoder qualification remain required work. The existing pixel encoder and its defaults are unchanged.
+available, including [Reader/DecodeAll composition](docs/animation.md); animation pixel encoding and full qualification remain required work. The existing pixel encoder and its defaults are unchanged.
 
 ## Intermediate still decoding
 
 `Decode` / `DecodeContext` return real NRGBA pixels for VP8/VP8L and raw/compressed ALPH stills.
 `DecodeConfig` is only bounded header inspection, including unsupported pixel
 forms. Import `m31labs.dev/tqwebp/register` explicitly for `image.Decode`.
-Animation is rejected, never flattened. Nearest chroma is not libwebp default
+These still APIs reject animation, never flattening it; use Reader/DecodeAll
+for composition. Nearest chroma is not libwebp default
 fancy upsampling: [pixel policy, resource audit and remaining gates](docs/decoding.md).
 
 VP8L and compressed alpha use an allocation-budgeted native adaptation; see

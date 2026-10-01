@@ -1,0 +1,1698 @@
+{
+  "libwebp": "0x10500",
+  "mux": "0x10500",
+  "demux": "0x10500",
+  "oracle": "WebPAnimDecoder MODE_RGBA, threads=0; neutral chroma only for VP8 frames; independent lossless literal streams/libwebpmux with documented unknown/one-frame framing mutations",
+  "fixtures": [
+    {
+      "file": "blend-dispose.webp",
+      "width": 7,
+      "height": 5,
+      "loop_count": 0,
+      "background": 2131899478,
+      "sha256": "571507c3e4f6dea2342e551856055d449d5cd183f85726799da86c1139575d17",
+      "frames": [
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            90,
+            40,
+            200,
+            0
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "blend-dispose-00.webp.rgba",
+          "encoded_file": "blend-dispose-00.webp",
+          "canvas_file": "blend-dispose-00.canvas.rgba",
+          "timestamp_ms": 0,
+          "canvas_sha256": "a9acca4b61d16e79a235af12332dbde009e1050c660e6578e09011bdba9e4a01"
+        },
+        {
+          "width": 5,
+          "height": 3,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            1,
+            200,
+            80,
+            3
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "blend-dispose-01.webp.rgba",
+          "encoded_file": "blend-dispose-01.webp",
+          "canvas_file": "blend-dispose-01.canvas.rgba",
+          "timestamp_ms": 17,
+          "canvas_sha256": "8526929543651166b0436410648b6944c958ab1d0a75c29921d1b0ba85d68863"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            240,
+            30,
+            10,
+            129
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "blend-dispose-02.webp.rgba",
+          "encoded_file": "blend-dispose-02.webp",
+          "canvas_file": "blend-dispose-02.canvas.rgba",
+          "timestamp_ms": 50,
+          "canvas_sha256": "e705770ec09c31cad6df85998b2f62363b00379af8befe8d923159ce55788a47"
+        },
+        {
+          "width": 5,
+          "height": 5,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            10,
+            90,
+            220,
+            65
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "blend-dispose-03.webp.rgba",
+          "encoded_file": "blend-dispose-03.webp",
+          "canvas_file": "blend-dispose-03.canvas.rgba",
+          "timestamp_ms": 51,
+          "canvas_sha256": "2aa39bdab80757112ed2289256b32b864cdc8f961f654e9ca8aa79ca9c344a7e"
+        },
+        {
+          "width": 7,
+          "height": 5,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            31,
+            77,
+            99,
+            255
+          ],
+          "duration": 23,
+          "replace": true,
+          "dispose": false,
+          "sample_file": "blend-dispose-04.webp.rgba",
+          "encoded_file": "blend-dispose-04.webp",
+          "canvas_file": "blend-dispose-04.canvas.rgba",
+          "timestamp_ms": 74,
+          "canvas_sha256": "4860d3564d66e51c5c58f24f3f034ae4e7c01201810ef03f175bf8dc5bdf43a5"
+        }
+      ]
+    },
+    {
+      "file": "replacement-transparency.webp",
+      "width": 5,
+      "height": 7,
+      "loop_count": 3,
+      "background": 2131899478,
+      "sha256": "ea3a2cda372fc35a77c0f6b7e4c9c3a0c6c98c7d41873b991f5f91586d613993",
+      "frames": [
+        {
+          "width": 5,
+          "height": 7,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            20,
+            40,
+            60,
+            255
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "replacement-transparency-00.webp.rgba",
+          "encoded_file": "replacement-transparency-00.webp",
+          "canvas_file": "replacement-transparency-00.canvas.rgba",
+          "timestamp_ms": 17,
+          "canvas_sha256": "0e2a5afdde33e93a304c35e2631d72b5371ae655af91aa75279c6661aebace5f"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            19,
+            57,
+            91,
+            0
+          ],
+          "duration": 29,
+          "replace": true,
+          "dispose": true,
+          "sample_file": "replacement-transparency-01.webp.rgba",
+          "encoded_file": "replacement-transparency-01.webp",
+          "canvas_file": "replacement-transparency-01.canvas.rgba",
+          "timestamp_ms": 46,
+          "canvas_sha256": "de178629c8521ea03cb85d839cc8bcc376da38a0cf5f61a4446d652332ac63c6"
+        },
+        {
+          "width": 1,
+          "height": 3,
+          "x": 0,
+          "y": 4,
+          "rgba": [
+            200,
+            80,
+            32,
+            180
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "replacement-transparency-02.webp.rgba",
+          "encoded_file": "replacement-transparency-02.webp",
+          "canvas_file": "replacement-transparency-02.canvas.rgba",
+          "timestamp_ms": 79,
+          "canvas_sha256": "329dcd8295ec3991d08ac62aef39a5a1951e617bfbc0f4d28bcad45fe7222ecb"
+        }
+      ]
+    },
+    {
+      "file": "key-after-dispose.webp",
+      "width": 5,
+      "height": 5,
+      "loop_count": 1,
+      "background": 2131899478,
+      "sha256": "42aac352922592db76d6d14dd9d0e2aa54ecc98c6540571aaeeb531e647337a5",
+      "frames": [
+        {
+          "width": 5,
+          "height": 5,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            80,
+            30,
+            250,
+            255
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "key-after-dispose-00.webp.rgba",
+          "encoded_file": "key-after-dispose-00.webp",
+          "canvas_file": "key-after-dispose-00.canvas.rgba",
+          "timestamp_ms": 17,
+          "canvas_sha256": "8e072fd6fb782887aa5bf3234e2d6a6a112ef37d61bb45d3b94edbc30988e9dd"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            1,
+            2,
+            3,
+            3
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "key-after-dispose-01.webp.rgba",
+          "encoded_file": "key-after-dispose-01.webp",
+          "canvas_file": "key-after-dispose-01.canvas.rgba",
+          "timestamp_ms": 18,
+          "canvas_sha256": "8bdd6cfe44cee9067d448a14ef846ebc6f357ba4a07e6cca03f1894d2b887948"
+        },
+        {
+          "width": 1,
+          "height": 1,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            19,
+            57,
+            91,
+            0
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "key-after-dispose-02.webp.rgba",
+          "encoded_file": "key-after-dispose-02.webp",
+          "canvas_file": "key-after-dispose-02.canvas.rgba",
+          "timestamp_ms": 51,
+          "canvas_sha256": "0b40187070b5ba87a9c74876160a4a7ea3ec085438969199946743174480c46f"
+        }
+      ]
+    },
+    {
+      "file": "one-frame-animation.webp",
+      "width": 5,
+      "height": 5,
+      "loop_count": 2,
+      "background": 2131899478,
+      "sha256": "7dff51f86acb17964ddf4cf4b8ef31f72a0d98684587e36a794fcd51bcc7410c",
+      "frames": [
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            19,
+            57,
+            91,
+            0
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "one-frame-animation-00.webp.rgba",
+          "encoded_file": "one-frame-animation-00.webp",
+          "canvas_file": "one-frame-animation-00.canvas.rgba",
+          "timestamp_ms": 17,
+          "canvas_sha256": "4d11ed4643bd3ef3a968ff0ebd0d02a837221e63dc99aa38338f1c787d6d3fa0"
+        }
+      ]
+    },
+    {
+      "file": "mixed-neutral.webp",
+      "width": 5,
+      "height": 7,
+      "loop_count": 1,
+      "background": 2131899478,
+      "sha256": "b8616bc24309d587deb95a77fb0cc7a143cd0835ed6b7c8b08d992f04f6e585b",
+      "frames": [
+        {
+          "width": 5,
+          "height": 7,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            140,
+            140,
+            140,
+            255
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "mixed-neutral-00.webp.rgba",
+          "encoded_file": "mixed-neutral-00.webp",
+          "canvas_file": "mixed-neutral-00.canvas.rgba",
+          "timestamp_ms": 17,
+          "canvas_sha256": "fd6e29f5287af501a956107313297d941dcbed412e5f6877028fc29a8065664f"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            20,
+            160,
+            230,
+            128
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "mixed-neutral-01.webp.rgba",
+          "encoded_file": "mixed-neutral-01.webp",
+          "canvas_file": "mixed-neutral-01.canvas.rgba",
+          "timestamp_ms": 50,
+          "canvas_sha256": "a6beb64601e85cc3d9fcd9344e524cb785b97c624ec14b3643ae75080378e126"
+        },
+        {
+          "width": 5,
+          "height": 7,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            30,
+            30,
+            30,
+            97
+          ],
+          "duration": 11,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "mixed-neutral-02.webp.rgba",
+          "encoded_file": "mixed-neutral-02.webp",
+          "canvas_file": "mixed-neutral-02.canvas.rgba",
+          "timestamp_ms": 61,
+          "canvas_sha256": "8efc4da25bc93b2599b9f0165ab9c5ef5f0d57aa7c165db80fe2a54e25a6fc81"
+        }
+      ]
+    },
+    {
+      "file": "max-duration.webp",
+      "width": 3,
+      "height": 1,
+      "loop_count": 65535,
+      "background": 2131899478,
+      "sha256": "4db6cae3dd379ebbca8f31ddc278c10b00cb88b352a1bac77b47a65aa2b5978d",
+      "frames": [
+        {
+          "width": 1,
+          "height": 1,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            30,
+            40,
+            50,
+            255
+          ],
+          "duration": 16777215,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "max-duration-00.webp.rgba",
+          "encoded_file": "max-duration-00.webp",
+          "canvas_file": "max-duration-00.canvas.rgba",
+          "timestamp_ms": 16777215,
+          "canvas_sha256": "10faf4de99fe7a54853feef575d83f0f6cd7a98eb15e044977d51e7022716fd5"
+        },
+        {
+          "width": 1,
+          "height": 1,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            90,
+            50,
+            20,
+            100
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "max-duration-01.webp.rgba",
+          "encoded_file": "max-duration-01.webp",
+          "canvas_file": "max-duration-01.canvas.rgba",
+          "timestamp_ms": 16777215,
+          "canvas_sha256": "34d415174fe58ba1ca736f04144cf17121f4e245fe487d3f1d9199893559dfce"
+        }
+      ]
+    },
+    {
+      "file": "adversarial-alpha-sequence.webp",
+      "width": 7,
+      "height": 5,
+      "loop_count": 7,
+      "background": 2131899478,
+      "sha256": "056a0c5a75fa0128fb79e415959e57c1a2f43a3bdd975caec743874a52ab0ec0",
+      "frames": [
+        {
+          "width": 7,
+          "height": 5,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            0,
+            255,
+            0,
+            0
+          ],
+          "duration": 0,
+          "replace": true,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-00.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-00.webp",
+          "canvas_file": "adversarial-alpha-sequence-00.canvas.rgba",
+          "timestamp_ms": 0,
+          "canvas_sha256": "733a4b23abaf3d9bb412f82dbb87a03ce2f9928f3678ab991b8d0ce8b9fab6f7"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            1,
+            255,
+            37,
+            255
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-01.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-01.webp",
+          "canvas_file": "adversarial-alpha-sequence-01.canvas.rgba",
+          "timestamp_ms": 1,
+          "canvas_sha256": "15c92a31e21aff31c0cb416419c6aa3c4e131c5d4ab028cf6a8486ec0f2cdad2"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 0,
+          "rgba": [
+            254,
+            255,
+            74,
+            1
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-02.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-02.webp",
+          "canvas_file": "adversarial-alpha-sequence-02.canvas.rgba",
+          "timestamp_ms": 18,
+          "canvas_sha256": "5494153e69bb7613d03e96a62627c667d49f1bb6a1adc6e0d00a64add7973665"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 2,
+          "rgba": [
+            255,
+            255,
+            111,
+            254
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-03.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-03.webp",
+          "canvas_file": "adversarial-alpha-sequence-03.canvas.rgba",
+          "timestamp_ms": 51,
+          "canvas_sha256": "c40f3b899076da34d0c29ba347c39845a5af23d906aafa9ca7fa0a6231064d04"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            0,
+            1,
+            148,
+            2
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-04.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-04.webp",
+          "canvas_file": "adversarial-alpha-sequence-04.canvas.rgba",
+          "timestamp_ms": 51,
+          "canvas_sha256": "0b53597500ab0f07c10e522f40963d27ec414109097fd156bc8be8237c61d56f"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 2,
+          "rgba": [
+            1,
+            1,
+            185,
+            253
+          ],
+          "duration": 1,
+          "replace": true,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-05.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-05.webp",
+          "canvas_file": "adversarial-alpha-sequence-05.canvas.rgba",
+          "timestamp_ms": 52,
+          "canvas_sha256": "8dc566b222e7931ef10e999a4744601ee6c07a2e47244d5218a57ed2c1791b93"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            254,
+            1,
+            222,
+            3
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-06.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-06.webp",
+          "canvas_file": "adversarial-alpha-sequence-06.canvas.rgba",
+          "timestamp_ms": 69,
+          "canvas_sha256": "47a5bf664f7ec8dcdadec9d05237bc2de99518f5c0bf5ab9f3f7772f324f7d84"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            255,
+            1,
+            3,
+            128
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-07.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-07.webp",
+          "canvas_file": "adversarial-alpha-sequence-07.canvas.rgba",
+          "timestamp_ms": 102,
+          "canvas_sha256": "a173d269efafc28250448528aa1a8c776eb8feaed6cb1e6af0463e2db0233daa"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 0,
+          "rgba": [
+            0,
+            0,
+            40,
+            127
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-08.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-08.webp",
+          "canvas_file": "adversarial-alpha-sequence-08.canvas.rgba",
+          "timestamp_ms": 102,
+          "canvas_sha256": "311550fc38e7c94356da025386ac9c09a310d441771387bebb7c9392d1787255"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 2,
+          "rgba": [
+            1,
+            0,
+            77,
+            129
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-09.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-09.webp",
+          "canvas_file": "adversarial-alpha-sequence-09.canvas.rgba",
+          "timestamp_ms": 103,
+          "canvas_sha256": "b8d85d340a45d0226b593638d3b808e326547aaa2d264cba534321c452774111"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            254,
+            0,
+            114,
+            64
+          ],
+          "duration": 17,
+          "replace": true,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-10.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-10.webp",
+          "canvas_file": "adversarial-alpha-sequence-10.canvas.rgba",
+          "timestamp_ms": 120,
+          "canvas_sha256": "2b449e3bec9f601453ee2f36abc6001203ebced6e6bbfa5849447ffcb06cb544"
+        },
+        {
+          "width": 7,
+          "height": 5,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            255,
+            0,
+            151,
+            192
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-11.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-11.webp",
+          "canvas_file": "adversarial-alpha-sequence-11.canvas.rgba",
+          "timestamp_ms": 153,
+          "canvas_sha256": "010037f2eb3d98b6208374d941466c6f6c4bf49f7a8d01ce865c093da412e090"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            0,
+            127,
+            188,
+            0
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-12.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-12.webp",
+          "canvas_file": "adversarial-alpha-sequence-12.canvas.rgba",
+          "timestamp_ms": 153,
+          "canvas_sha256": "15a52a63031c8a52678653d26e013654c33a5ef445357a7f061de554d965faa8"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            1,
+            127,
+            225,
+            255
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-13.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-13.webp",
+          "canvas_file": "adversarial-alpha-sequence-13.canvas.rgba",
+          "timestamp_ms": 154,
+          "canvas_sha256": "209898e9fe9d125c2d55cff20e266fd1dafb51ba43116f961b311ade2a64f85b"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 0,
+          "rgba": [
+            254,
+            127,
+            6,
+            1
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-14.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-14.webp",
+          "canvas_file": "adversarial-alpha-sequence-14.canvas.rgba",
+          "timestamp_ms": 171,
+          "canvas_sha256": "2453e2ba3f0d37b5008c1e34362068c499289f465d0f3d0cbce295bb78f82c9c"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 2,
+          "rgba": [
+            255,
+            127,
+            43,
+            254
+          ],
+          "duration": 33,
+          "replace": true,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-15.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-15.webp",
+          "canvas_file": "adversarial-alpha-sequence-15.canvas.rgba",
+          "timestamp_ms": 204,
+          "canvas_sha256": "30306ae26e917642b38635a7f76a8251ecf69f625bd6caa6e7491fa1749ae576"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            0,
+            255,
+            80,
+            2
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-16.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-16.webp",
+          "canvas_file": "adversarial-alpha-sequence-16.canvas.rgba",
+          "timestamp_ms": 204,
+          "canvas_sha256": "bd7b4d5670df20290352e6afbd89b58d9a4f88425ea7f806a15635ca966d606d"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 2,
+          "rgba": [
+            1,
+            255,
+            117,
+            253
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-17.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-17.webp",
+          "canvas_file": "adversarial-alpha-sequence-17.canvas.rgba",
+          "timestamp_ms": 205,
+          "canvas_sha256": "ed5930657e1b297bbbfa8e918891cdd437d25c1fcffa59481d879cf7ec9b0eb6"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            254,
+            255,
+            154,
+            3
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-18.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-18.webp",
+          "canvas_file": "adversarial-alpha-sequence-18.canvas.rgba",
+          "timestamp_ms": 222,
+          "canvas_sha256": "5a93595c4434c65c6cafd92b13d464e62dcc081f357b5fad9f5c8bc65b4625a4"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            255,
+            255,
+            191,
+            128
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-19.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-19.webp",
+          "canvas_file": "adversarial-alpha-sequence-19.canvas.rgba",
+          "timestamp_ms": 255,
+          "canvas_sha256": "19bb9d507343ec75dfb6f98c5a2e1de8d954defe0873e82f5459acb1e6fd5b70"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 0,
+          "rgba": [
+            0,
+            1,
+            228,
+            127
+          ],
+          "duration": 0,
+          "replace": true,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-20.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-20.webp",
+          "canvas_file": "adversarial-alpha-sequence-20.canvas.rgba",
+          "timestamp_ms": 255,
+          "canvas_sha256": "7be0dcdf37c269e15fc93318eefbe81d119d2c42c1647e4e295bf19dc1fa178a"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 2,
+          "rgba": [
+            1,
+            1,
+            9,
+            129
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-21.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-21.webp",
+          "canvas_file": "adversarial-alpha-sequence-21.canvas.rgba",
+          "timestamp_ms": 256,
+          "canvas_sha256": "f5725b58c852d98d8f66962fe96a993ede9fef84ccee30e9b3ddf45ffd84f4c1"
+        },
+        {
+          "width": 7,
+          "height": 5,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            254,
+            1,
+            46,
+            64
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-22.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-22.webp",
+          "canvas_file": "adversarial-alpha-sequence-22.canvas.rgba",
+          "timestamp_ms": 273,
+          "canvas_sha256": "04db7518c57b4efd612eaa787e2fc51b00f0823b49cf05f6bfcb75635e591798"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 2,
+          "rgba": [
+            255,
+            1,
+            83,
+            192
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-23.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-23.webp",
+          "canvas_file": "adversarial-alpha-sequence-23.canvas.rgba",
+          "timestamp_ms": 306,
+          "canvas_sha256": "e5f147602f3f1c06a5bb3b2612b499326aa0802c2b01e7f5e4f209f37488b9e6"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            0,
+            0,
+            120,
+            0
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-24.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-24.webp",
+          "canvas_file": "adversarial-alpha-sequence-24.canvas.rgba",
+          "timestamp_ms": 306,
+          "canvas_sha256": "6e0491a2017f9cba29015da456c3fc863f9d78af1e3fec16a86d3d979abf6d41"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            1,
+            0,
+            157,
+            255
+          ],
+          "duration": 1,
+          "replace": true,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-25.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-25.webp",
+          "canvas_file": "adversarial-alpha-sequence-25.canvas.rgba",
+          "timestamp_ms": 307,
+          "canvas_sha256": "e09757c8b4d294c60ff35b71454e9907077719316c7a48e54c5f011ccf469a07"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 0,
+          "rgba": [
+            254,
+            0,
+            194,
+            1
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-26.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-26.webp",
+          "canvas_file": "adversarial-alpha-sequence-26.canvas.rgba",
+          "timestamp_ms": 324,
+          "canvas_sha256": "b730eeb215b3fce1ca4d687ca282c96b3ce0020d8c282a5aab1f05458fb45a5a"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 2,
+          "rgba": [
+            255,
+            0,
+            231,
+            254
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-27.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-27.webp",
+          "canvas_file": "adversarial-alpha-sequence-27.canvas.rgba",
+          "timestamp_ms": 357,
+          "canvas_sha256": "7bbc3d640eac64cf5de479c1d664c8f31c7ca3b4f75663e78dcda5d5b331e54c"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            0,
+            127,
+            12,
+            2
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-28.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-28.webp",
+          "canvas_file": "adversarial-alpha-sequence-28.canvas.rgba",
+          "timestamp_ms": 357,
+          "canvas_sha256": "cf63f82c2d9b0ba095c99c4f064d22b413831cf50ced9a6321f4479cd60e94c6"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 2,
+          "rgba": [
+            1,
+            127,
+            49,
+            253
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-29.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-29.webp",
+          "canvas_file": "adversarial-alpha-sequence-29.canvas.rgba",
+          "timestamp_ms": 358,
+          "canvas_sha256": "9098f631c11fdc38d3bb602b189569724621dc60560f143a583518443441ea4d"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            254,
+            127,
+            86,
+            3
+          ],
+          "duration": 17,
+          "replace": true,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-30.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-30.webp",
+          "canvas_file": "adversarial-alpha-sequence-30.canvas.rgba",
+          "timestamp_ms": 375,
+          "canvas_sha256": "7e0d415d02c107249f03527ad5aa509ae2b590f49f97b45d95f9c686ddae487e"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            255,
+            127,
+            123,
+            128
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-31.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-31.webp",
+          "canvas_file": "adversarial-alpha-sequence-31.canvas.rgba",
+          "timestamp_ms": 408,
+          "canvas_sha256": "d85b5a85a6a9db071c009cc3a745c5e6ba3f7475a0d830ce01bf04475bdfa490"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 0,
+          "rgba": [
+            0,
+            255,
+            160,
+            127
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-32.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-32.webp",
+          "canvas_file": "adversarial-alpha-sequence-32.canvas.rgba",
+          "timestamp_ms": 408,
+          "canvas_sha256": "479ae73a8ffd48f81d558888b7d771098bb64eb718add826a318b3e7d733e017"
+        },
+        {
+          "width": 7,
+          "height": 5,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            1,
+            255,
+            197,
+            129
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-33.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-33.webp",
+          "canvas_file": "adversarial-alpha-sequence-33.canvas.rgba",
+          "timestamp_ms": 409,
+          "canvas_sha256": "78d67c6daefceb0c975ed55c3bf726aafb8770bbce2891c603d1b8153b5d8e98"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            254,
+            255,
+            234,
+            64
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-34.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-34.webp",
+          "canvas_file": "adversarial-alpha-sequence-34.canvas.rgba",
+          "timestamp_ms": 426,
+          "canvas_sha256": "133f192d151dd77172e4df8f9449ae4c1318d2157847d917f116a78d219ce692"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 2,
+          "rgba": [
+            255,
+            255,
+            15,
+            192
+          ],
+          "duration": 33,
+          "replace": true,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-35.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-35.webp",
+          "canvas_file": "adversarial-alpha-sequence-35.canvas.rgba",
+          "timestamp_ms": 459,
+          "canvas_sha256": "00d2556b01cc2ca60fecf80990bf374cd17343ca5877683adaebd1eab7712d18"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            0,
+            1,
+            52,
+            0
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-36.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-36.webp",
+          "canvas_file": "adversarial-alpha-sequence-36.canvas.rgba",
+          "timestamp_ms": 459,
+          "canvas_sha256": "8b4b6dc5b88bf8f00f080119942c7d3d2bfacafc40e1c04b270348e17f5b06bd"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            1,
+            1,
+            89,
+            255
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-37.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-37.webp",
+          "canvas_file": "adversarial-alpha-sequence-37.canvas.rgba",
+          "timestamp_ms": 460,
+          "canvas_sha256": "e88e40c6b0ccf5ae8cc2d87edea676d2e0209b2117fc967596916530c0620ce0"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 0,
+          "rgba": [
+            254,
+            1,
+            126,
+            1
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-38.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-38.webp",
+          "canvas_file": "adversarial-alpha-sequence-38.canvas.rgba",
+          "timestamp_ms": 477,
+          "canvas_sha256": "13431b40e438f16f8293f308ba97add77cf4d7c00072ec6447db2315fcd6c62e"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 2,
+          "rgba": [
+            255,
+            1,
+            163,
+            254
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-39.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-39.webp",
+          "canvas_file": "adversarial-alpha-sequence-39.canvas.rgba",
+          "timestamp_ms": 510,
+          "canvas_sha256": "185d08f7a7e23413011f473ce0a19ffb99ab76b14221b10b76f1474566d7f194"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            0,
+            0,
+            200,
+            2
+          ],
+          "duration": 0,
+          "replace": true,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-40.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-40.webp",
+          "canvas_file": "adversarial-alpha-sequence-40.canvas.rgba",
+          "timestamp_ms": 510,
+          "canvas_sha256": "210c75272da2f718d1b4260ae3f1be523ac7c51d8eee0fa9562d49e252da4712"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 2,
+          "rgba": [
+            1,
+            0,
+            237,
+            253
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-41.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-41.webp",
+          "canvas_file": "adversarial-alpha-sequence-41.canvas.rgba",
+          "timestamp_ms": 511,
+          "canvas_sha256": "6729918ccd06522e4f611c6e3fdf9997c091bd0063a273bb923428bf0405fe95"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            254,
+            0,
+            18,
+            3
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-42.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-42.webp",
+          "canvas_file": "adversarial-alpha-sequence-42.canvas.rgba",
+          "timestamp_ms": 528,
+          "canvas_sha256": "dac8297c82cae0473125fd0bf9d2942c21d7e36f95f9dadd05a451bfb3a5912c"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            255,
+            0,
+            55,
+            128
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-43.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-43.webp",
+          "canvas_file": "adversarial-alpha-sequence-43.canvas.rgba",
+          "timestamp_ms": 561,
+          "canvas_sha256": "c8f8f31a4db95dcd46f11a118aed656a94c2146d1e25fbebcf8152b2f1c10ecc"
+        },
+        {
+          "width": 7,
+          "height": 5,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            0,
+            127,
+            92,
+            127
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-44.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-44.webp",
+          "canvas_file": "adversarial-alpha-sequence-44.canvas.rgba",
+          "timestamp_ms": 561,
+          "canvas_sha256": "e9c8dd784fa67a5b6e8b140460dec26cff34936d41095a24c1ffdf291584c569"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 2,
+          "rgba": [
+            1,
+            127,
+            129,
+            129
+          ],
+          "duration": 1,
+          "replace": true,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-45.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-45.webp",
+          "canvas_file": "adversarial-alpha-sequence-45.canvas.rgba",
+          "timestamp_ms": 562,
+          "canvas_sha256": "0703dd3af401d34c7b4152cf369fe1dcd06a64a49b5263928cd94094efd6ce02"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            254,
+            127,
+            166,
+            64
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-46.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-46.webp",
+          "canvas_file": "adversarial-alpha-sequence-46.canvas.rgba",
+          "timestamp_ms": 579,
+          "canvas_sha256": "c2d27c6a988c1156921c29149462669ddc3473cc296be5c2002b1f3bb878d481"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 2,
+          "rgba": [
+            255,
+            127,
+            203,
+            192
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-47.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-47.webp",
+          "canvas_file": "adversarial-alpha-sequence-47.canvas.rgba",
+          "timestamp_ms": 612,
+          "canvas_sha256": "9e13837548503e8cae9ddc5d75d5ba6f18d851fa59c980a3eb80bbff134069b6"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            0,
+            255,
+            240,
+            0
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-48.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-48.webp",
+          "canvas_file": "adversarial-alpha-sequence-48.canvas.rgba",
+          "timestamp_ms": 612,
+          "canvas_sha256": "76983de1bce55e0e9fde8eab970f90274b4dd80e0633f1dfb8424fbfe0866a41"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            1,
+            255,
+            21,
+            255
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-49.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-49.webp",
+          "canvas_file": "adversarial-alpha-sequence-49.canvas.rgba",
+          "timestamp_ms": 613,
+          "canvas_sha256": "afdd73aed4dd6cc08bb7de97dde9233c014a79e275c8258807bf833c3c6b73b1"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 0,
+          "rgba": [
+            254,
+            255,
+            58,
+            1
+          ],
+          "duration": 17,
+          "replace": true,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-50.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-50.webp",
+          "canvas_file": "adversarial-alpha-sequence-50.canvas.rgba",
+          "timestamp_ms": 630,
+          "canvas_sha256": "0ed8cf4769da572ea111a283fde1baac8d5e5502f93c76da4c039345eed9e9d9"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 2,
+          "rgba": [
+            255,
+            255,
+            95,
+            254
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-51.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-51.webp",
+          "canvas_file": "adversarial-alpha-sequence-51.canvas.rgba",
+          "timestamp_ms": 663,
+          "canvas_sha256": "7394a8d68446bd6c122ad0fda09c80e27ff539e6bbd7b073ddc14f12401d0310"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            0,
+            1,
+            132,
+            2
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-52.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-52.webp",
+          "canvas_file": "adversarial-alpha-sequence-52.canvas.rgba",
+          "timestamp_ms": 663,
+          "canvas_sha256": "abb77f4df701ab038429ea3fc79cb2f6a29bd6e74133c6719e6ab95e912245c3"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 2,
+          "rgba": [
+            1,
+            1,
+            169,
+            253
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-53.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-53.webp",
+          "canvas_file": "adversarial-alpha-sequence-53.canvas.rgba",
+          "timestamp_ms": 664,
+          "canvas_sha256": "971244ebb3ddc797d94f6b66a30075bed8b72063722b4a0ec2b0fc4ee7ff71aa"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            254,
+            1,
+            206,
+            3
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-54.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-54.webp",
+          "canvas_file": "adversarial-alpha-sequence-54.canvas.rgba",
+          "timestamp_ms": 681,
+          "canvas_sha256": "0c783fa7f76e5a7bfecaca38cb6b7c5905f294058f3db7d5d916cef008a533dc"
+        },
+        {
+          "width": 7,
+          "height": 5,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            255,
+            1,
+            243,
+            128
+          ],
+          "duration": 33,
+          "replace": true,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-55.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-55.webp",
+          "canvas_file": "adversarial-alpha-sequence-55.canvas.rgba",
+          "timestamp_ms": 714,
+          "canvas_sha256": "b0698314e1354fad7a2c1743646b310feb4d74a47d532d28ee1ec0c0e9e1766e"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 0,
+          "rgba": [
+            0,
+            0,
+            24,
+            127
+          ],
+          "duration": 0,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-56.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-56.webp",
+          "canvas_file": "adversarial-alpha-sequence-56.canvas.rgba",
+          "timestamp_ms": 714,
+          "canvas_sha256": "1eb7dbcbd749101701abef256aa24129d075960a2534f6f9ef17d413a5e9b7e4"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 2,
+          "rgba": [
+            1,
+            0,
+            61,
+            129
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-57.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-57.webp",
+          "canvas_file": "adversarial-alpha-sequence-57.canvas.rgba",
+          "timestamp_ms": 715,
+          "canvas_sha256": "b3d125744ca07dd4982d0c5d949aebd32a344f14e8fbaf4540c79b223b46c0c2"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 2,
+          "rgba": [
+            254,
+            0,
+            98,
+            64
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-58.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-58.webp",
+          "canvas_file": "adversarial-alpha-sequence-58.canvas.rgba",
+          "timestamp_ms": 732,
+          "canvas_sha256": "aaf7ca3720ca398b0f635477e1b891a32ef32ad5e454f0894f3825f37add47de"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 2,
+          "rgba": [
+            255,
+            0,
+            135,
+            192
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-59.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-59.webp",
+          "canvas_file": "adversarial-alpha-sequence-59.canvas.rgba",
+          "timestamp_ms": 765,
+          "canvas_sha256": "4aa4f5e1a9eaa0f93023caf6cb995964e6ecb837c0ab85d9716a7386e21bd2f1"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            0,
+            127,
+            172,
+            0
+          ],
+          "duration": 0,
+          "replace": true,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-60.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-60.webp",
+          "canvas_file": "adversarial-alpha-sequence-60.canvas.rgba",
+          "timestamp_ms": 765,
+          "canvas_sha256": "de0d24226ba10c111680df9c3f2a698a0f691486534d9a12a7c32d98163b4c91"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 2,
+          "y": 0,
+          "rgba": [
+            1,
+            127,
+            209,
+            255
+          ],
+          "duration": 1,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-61.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-61.webp",
+          "canvas_file": "adversarial-alpha-sequence-61.canvas.rgba",
+          "timestamp_ms": 766,
+          "canvas_sha256": "8b6d805ecba0eb2e02ef381fe871c6a240b354b6daaecfbd8c483eb0b629738e"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 4,
+          "y": 0,
+          "rgba": [
+            254,
+            127,
+            246,
+            1
+          ],
+          "duration": 17,
+          "replace": false,
+          "dispose": true,
+          "sample_file": "adversarial-alpha-sequence-62.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-62.webp",
+          "canvas_file": "adversarial-alpha-sequence-62.canvas.rgba",
+          "timestamp_ms": 783,
+          "canvas_sha256": "57098c4351b0b14c301720c49d790785d51d16fd88f640025850f626583761d9"
+        },
+        {
+          "width": 3,
+          "height": 3,
+          "x": 0,
+          "y": 2,
+          "rgba": [
+            255,
+            127,
+            27,
+            254
+          ],
+          "duration": 33,
+          "replace": false,
+          "dispose": false,
+          "sample_file": "adversarial-alpha-sequence-63.webp.rgba",
+          "encoded_file": "adversarial-alpha-sequence-63.webp",
+          "canvas_file": "adversarial-alpha-sequence-63.canvas.rgba",
+          "timestamp_ms": 816,
+          "canvas_sha256": "efcf7a8b8dd01ac3e822aed33722ed9cf2849cd50e32c3e9bea8c446c7347be8"
+        }
+      ]
+    }
+  ]
+}

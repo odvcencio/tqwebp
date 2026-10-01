@@ -7,9 +7,8 @@ none/horizontal/vertical/gradient filters. Metadata is intentionally omitted
 from these pixel-only calls; use container.Demux for byte-preserving metadata.
 
 VP8L and compressed ALPH are now supported by the separately audited
-[lossless decoding adaptation](lossless-decoding.md). Composed animation,
-DecodeAll, Reader, Document and transparent encoding are **required remaining
-work**. Decode returns ErrAnimatedImage for declared animation, never frame zero. This is not the complete
+[lossless decoding adaptation](lossless-decoding.md). Composed animation, Reader, Document and DecodeAll are supported by the
+[bounded animation slice](animation.md). Transparent encoding remains required work. Decode returns ErrAnimatedImage for declared animation, never frame zero. This is not the complete
 P5/P6 or usability release, and browser qualification remains open.
 
 ## Pixel policy
@@ -50,15 +49,17 @@ import _ "m31labs.dev/tqwebp/register"
 
 The registration package wires image.Decode and image.DecodeConfig. Importing
 another WebP registration package is ambiguous: Go uses the first registered
-matching decoder. Avoid that combination. Animation remains an error.
+matching decoder. Avoid that combination. Registered image.Decode remains a
+still API and rejects animation; use Reader/DecodeAll for composition.
 
 ## Resource contract and allocation audit
 
 Defaults: 64 MiB input, 16 million canvas pixels, 16 million frame pixels,
 1000 frames, 256 million aggregate decoded pixels, 4 MiB metadata, 256 MiB
 library-managed working allocations and ten minutes one-pass duration. Still
-calls perform one frame; duration is zero. Animation fields are reserved for
-future implementation. An additional fixed 4096-chunk maximum is enforced.
+calls perform one frame; duration is zero. Animation fields apply to
+Reader/DecodeAll over one stored pass. An additional fixed 4096-chunk maximum
+is enforced.
 
 MaxWorkingBytes counts library-managed live backing storage, excluding caller
 input/copies, Go object/allocator/runtime overhead, goroutine stacks and process

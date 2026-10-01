@@ -11,15 +11,13 @@ import (
 	"time"
 
 	"m31labs.dev/tqwebp/container"
-	vp8 "m31labs.dev/tqwebp/internal/vp8decode"
-	vp8l "m31labs.dev/tqwebp/internal/vp8ldecode"
 )
 
 var (
 	ErrInvalidReader      = container.ErrInvalidReader
 	ErrInvalidFormat      = container.ErrInvalidFormat
 	ErrUnsupportedFeature = container.ErrUnsupportedFeature
-	ErrAnimatedImage      = errors.New("tqwebp: animated image; composed animation decoding is not yet implemented")
+	ErrAnimatedImage      = errors.New("tqwebp: animated image; use NewReader or DecodeAll")
 )
 
 // FormatError locates a malformed or unsupported encoded structure.
@@ -29,7 +27,7 @@ type FormatError = container.FormatError
 // invalid. MaxWorkingBytes covers library-managed live backing allocations,
 // including compressed data and output, not caller storage, runtime overhead or
 // process RSS. No limit interrupts blocked caller I/O. Animation-related fields
-// are reserved for the required future animation decoder.
+// apply to NewReader and DecodeAll.
 type ReadLimits struct {
 	MaxInputBytes, MaxCanvasPixels, MaxFramePixels, MaxFrames int64
 	MaxDecodedPixels, MaxMetadataBytes, MaxWorkingBytes       int64
@@ -246,70 +244,11 @@ func DecodeContext(ctx context.Context, r io.Reader, limits ReadLimits) (image.I
 		used = next
 		return nil
 	}
-	if len(frame.VP8L) > 0 {
-		out, e := vp8l.Decode(ctx, frame.VP8L, int(w), int(ht), false, reserve)
-		if e != nil {
-			return nil, losslessError(ctx, "VP8L", e)
-		}
-		return out, nil
+	out, e := decodePixels(ctx, int(w), int(ht), frame.VP8, frame.VP8L, frame.ALPH, reserve)
+	if e != nil {
+		return nil, e
 	}
-	// 384 bytes/MB for padded YUV, four filter bytes/MB, six predictor
-	// bytes/column, <= compressed payload bytes for partition copies, output.
-	mw, mh := (w+15)/16, (ht+15)/16
-	working := base + 388*mw*mh + 6*mw + int64(len(frame.VP8)) + 4*pixels
-	if err = readCheck("working_bytes", working, l.MaxWorkingBytes); err != nil {
-		return nil, err
-	}
-	if working > int64(int(^uint(0)>>1)) {
-		return nil, &LimitError{"working_bytes", int64(int(^uint(0) >> 1)), working}
-	}
-	used = working
-	d := vp8.NewDecoder()
-	d.Init(bytes.NewReader(frame.VP8), len(frame.VP8))
-	fh, err := d.DecodeFrameHeader()
-	if err != nil {
-		return nil, decodeError(-1, "VP8 ", err)
-	}
-	if !fh.KeyFrame || !fh.ShowFrame || int64(fh.Width) != w || int64(fh.Height) != ht {
-		return nil, decodeError(-1, "VP8 ", ErrInvalidFormat)
-	}
-	yuv, err := d.DecodeFrame(ctx)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, decodeError(-1, "VP8 ", err)
-	}
-	out := image.NewNRGBA(image.Rect(0, 0, int(w), int(ht)))
-	for y := 0; y < int(ht); y++ {
-		if err = ctx.Err(); err != nil {
-			return nil, err
-		}
-		for x := 0; x < int(w); x++ {
-			yy := int(yuv.Y[y*yuv.YStride+x])
-			uv := (y/2)*yuv.CStride + x/2
-			rr, gg, bb := limitedRGB(yy, int(yuv.Cb[uv]), int(yuv.Cr[uv]))
-			i := y*out.Stride + 4*x
-			out.Pix[i], out.Pix[i+1], out.Pix[i+2], out.Pix[i+3] = rr, gg, bb, 255
-		}
-	}
-	if len(frame.ALPH) > 0 {
-		if frame.ALPH[0]&3 == 0 {
-			err = decodeRawAlpha(ctx, out, frame.ALPH)
-		} else {
-			var residual *image.NRGBA
-			residual, err = vp8l.Decode(ctx, frame.ALPH[1:], int(w), int(ht), true, reserve)
-			if err != nil {
-				return nil, losslessError(ctx, "ALPH", err)
-			}
-			err = unfilterAlpha(ctx, out, frame.ALPH[0], residual.Pix[1:], 4)
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return out, ctx.Err()
+	return out, nil
 }
 
 // Copyright 2010 Google Inc. All Rights Reserved.

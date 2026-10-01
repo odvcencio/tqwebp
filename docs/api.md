@@ -2,9 +2,9 @@
 
 This contract covers the existing encoder plus the P1/P2 foundation. The
 reference source is `efac282eaa5a1248847a89381033398bca1a2929`. It does not claim
-animation or transparent encoding support. The intermediate public decoder
-supports VP8/VP8L stills and raw/compressed ALPH; see [decoding](decoding.md). The separate experimental
-[container foundation](container.md) now transports and edits still-file metadata.
+animation or transparent pixel encoding support. The public decoder supports
+VP8/VP8L and raw/compressed ALPH stills plus [composed animation](animation.md).
+The experimental [container API](container.md) transports still/animation metadata.
 
 ## Existing callers remain compatible
 
@@ -83,13 +83,10 @@ hard timeout for blocked callbacks.
 
 ## Required remaining toolkit work
 
-The experimental still-container metadata foundation is described separately.
-The completed usability product still requires animation-container integration,
-exact alpha encoding, full still-decoder qualification, document metadata integration, animation reading/composition/encoding, CLI workflows and full
-release qualification. The selected decoder route remains pinned native
-`x/image/vp8` and `vp8l` adapters with audited resources/cancellation; this
-tranche neither changes that policy nor introduces those imports. The encoder
-import graph still excludes the oracle and `x/image`.
+The completed usability product still requires exact alpha encoding, animation
+pixel encoding (EncodeAll), CLI workflows, broad holdout/browser qualification
+and full release qualification. Root codecs remain pinned native audited
+adaptations; runtime foreign decoders and the oracle stay outside its import graph.
 
 No tagged release, publication or browser/runtime qualification is implied by
 these foundation tests.

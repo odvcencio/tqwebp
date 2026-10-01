@@ -147,7 +147,7 @@ func TestMalformedContainers(t *testing.T) {
 		}
 	}
 	for _, b := range [][]byte{riff(ext(2)), riff(ext(0), Chunk{"ANMF", nil})} {
-		if _, err := parse(b); !errors.Is(err, ErrUnsupportedFeature) {
+		if _, err := parse(b); !errors.Is(err, ErrInvalidFormat) {
 			t.Fatal(err)
 		}
 	}
@@ -409,8 +409,8 @@ func TestCancelAfterFirstWrite(t *testing.T) {
 	}
 }
 
-func TestAnimationControlsExplicitlyUnsupported(t *testing.T) {
-	for _, change := range []func(*File){func(f *File) { f.Animated = true }, func(f *File) { f.LoopCount = 1 }, func(f *File) { f.Background.A = 1 }, func(f *File) { f.Frames[0].Duration = 1 }, func(f *File) { f.Frames[0].Blend = BlendReplace }, func(f *File) { f.Frames[0].Dispose = DisposeBackground }} {
+func TestStillAnimationControlsExplicitlyUnsupported(t *testing.T) {
+	for _, change := range []func(*File){func(f *File) { f.LoopCount = 1 }, func(f *File) { f.Background.A = 1 }, func(f *File) { f.Frames[0].Duration = 1 }, func(f *File) { f.Frames[0].Blend = BlendReplace }, func(f *File) { f.Frames[0].Dispose = DisposeBackground }} {
 		f := still()
 		change(f)
 		var b bytes.Buffer
@@ -473,5 +473,21 @@ func TestMuxCancellationDuringPrivatePreparation(t *testing.T) {
 	w := &callbacks{}
 	if err := Mux(ctx, w, f, Limits{}); err != context.Canceled || w.calls != 0 {
 		t.Fatal(err, w.calls)
+	}
+}
+
+type invalidByteCountReader int
+
+func (r invalidByteCountReader) Read(p []byte) (int, error) {
+	if r < 0 {
+		return -1, nil
+	}
+	return len(p) + 1, nil
+}
+func TestDemuxInvalidReaderCountCategory(t *testing.T) {
+	for _, r := range []invalidByteCountReader{-1, 1} {
+		if _, e := Demux(context.Background(), r, Limits{}); !errors.Is(e, ErrInvalidReader) || errors.Is(e, ErrInvalidFormat) || errors.Is(e, io.ErrNoProgress) {
+			t.Fatal(e)
+		}
 	}
 }
