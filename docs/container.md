@@ -123,3 +123,10 @@ Primary format references:
 ## Animation canonical layout
 
 Animation Mux writes VP8X, ICC metadata, ANIM, ANMF frames, non-ICC metadata, then file-level unknown chunks. Within each ANMF, ALPH precedes its VP8 payload (or VP8L stands alone), followed by ordered per-frame unknown chunks. Unknown payloads and relative order within their list survive, as do duplicate metadata payloads. Original interleaving, padding layout and extension bytes are not preserved byte-for-byte. No raw-layout mode is provided. Mux transports already encoded frame payloads; it is not a pixel animation encoder.
+
+## Experimental API compatibility
+
+Animation added EncodedFrame.UnknownChunks. This extends an exported experimental
+struct and breaks positional EncodedFrame literals from the still-only candidate.
+Use keyed literals for this container API. Root Options and Limits retain their
+original field order and positional consumer compatibility.

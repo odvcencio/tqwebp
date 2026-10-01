@@ -188,15 +188,6 @@ func FuzzEncodeAPI(f *testing.F) {
 			}
 			return
 		}
-		if !m.Opaque() {
-			if !errors.Is(err, ErrAlphaUnsupported) {
-				t.Fatalf("alpha: %v", err)
-			}
-			if out.Len() != 0 {
-				t.Fatal("wrote refused input")
-			}
-			return
-		}
 		if err != nil {
 			if errors.Is(err, ErrOutputTooLarge) {
 				var full bytes.Buffer
@@ -216,6 +207,15 @@ func FuzzEncodeAPI(f *testing.F) {
 		}
 		if decoded.Bounds().Dx() != width || decoded.Bounds().Dy() != height {
 			t.Fatal("wrong dimensions")
+		}
+		for y := 0; y < height; y++ {
+			for x := 0; x < width; x++ {
+				_, _, _, want := m.At(m.Bounds().Min.X+x, m.Bounds().Min.Y+y).RGBA()
+				_, _, _, got := decoded.At(x, y).RGBA()
+				if got>>8 != want>>8 {
+					t.Fatal("alpha changed")
+				}
+			}
 		}
 		var again bytes.Buffer
 		if err := Encode(&again, m, options); err != nil {

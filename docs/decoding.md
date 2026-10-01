@@ -8,7 +8,7 @@ from these pixel-only calls; use container.Demux for byte-preserving metadata.
 
 VP8L and compressed ALPH are now supported by the separately audited
 [lossless decoding adaptation](lossless-decoding.md). Composed animation, Reader, Document and DecodeAll are supported by the
-[bounded animation slice](animation.md). Transparent encoding remains required work. Decode returns ErrAnimatedImage for declared animation, never frame zero. This is not the complete
+[bounded animation slice](animation.md). Transparent encoding is now supported; see [encoding](encoding-alpha-animation.md). Decode returns ErrAnimatedImage for declared animation, never frame zero. This is not the complete
 P5/P6 or usability release, and browser qualification remains open.
 
 ## Pixel policy

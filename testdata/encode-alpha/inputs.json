@@ -1,0 +1,79 @@
+[
+  {
+    "name": "alpha-odd",
+    "width": 17,
+    "height": 19,
+    "animated": false,
+    "loops": 0,
+    "frames": [
+      {
+        "source": "alpha-odd-00.source.rgba",
+        "duration_ms": 0
+      }
+    ]
+  },
+  {
+    "name": "alpha-tiny",
+    "width": 1,
+    "height": 1,
+    "animated": false,
+    "loops": 0,
+    "frames": [
+      {
+        "source": "alpha-tiny-00.source.rgba",
+        "duration_ms": 0
+      }
+    ]
+  },
+  {
+    "name": "opaque-still",
+    "width": 3,
+    "height": 5,
+    "animated": false,
+    "loops": 0,
+    "frames": [
+      {
+        "source": "opaque-still-00.source.rgba",
+        "duration_ms": 0
+      }
+    ]
+  },
+  {
+    "name": "replace-holes",
+    "width": 7,
+    "height": 5,
+    "animated": true,
+    "loops": 3,
+    "frames": [
+      {
+        "source": "replace-holes-00.source.rgba",
+        "duration_ms": 0
+      },
+      {
+        "source": "replace-holes-01.source.rgba",
+        "duration_ms": 17
+      },
+      {
+        "source": "replace-holes-02.source.rgba",
+        "duration_ms": 1
+      },
+      {
+        "source": "replace-holes-03.source.rgba",
+        "duration_ms": 33
+      }
+    ]
+  },
+  {
+    "name": "one-frame-alpha",
+    "width": 3,
+    "height": 3,
+    "animated": true,
+    "loops": 3,
+    "frames": [
+      {
+        "source": "one-frame-alpha-00.source.rgba",
+        "duration_ms": 0
+      }
+    ]
+  }
+]

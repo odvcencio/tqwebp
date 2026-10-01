@@ -26,9 +26,9 @@
 //
 // # Scope
 //
-// This release codes opaque images only. Encode returns
-// ErrAlphaUnsupported for an image with a translucent pixel, so no
-// pipeline can lose a mask without noticing.
+// Transparent images use lossy straight-color VP8 plus exact raw 8-bit alpha.
+// There is no implicit flattening. Higher-bit-depth inputs reduce to 8 bits;
+// lossy output does not guarantee hidden RGB preservation at alpha zero.
 //
 // # Resource limits
 //
@@ -113,9 +113,9 @@ var (
 	// ErrInvalidWriter reports a nil output writer.
 	ErrInvalidWriter = errors.New("tqwebp: invalid writer")
 
-	// ErrAlphaUnsupported reports an image with at least one translucent
-	// pixel. This release codes opaque images only, and it refuses rather
-	// than dropping the alpha channel in silence.
+	// ErrAlphaUnsupported is retained for source compatibility. Transparent
+	// inputs are now supported, so ordinary Encode calls no longer return it.
+	// Applications requiring opaque-only policy should check opacity explicitly.
 	ErrAlphaUnsupported = errors.New("tqwebp: alpha channel is not supported yet")
 
 	// ErrInvalidOptions reports an option value outside its range.
@@ -224,7 +224,7 @@ func EncodeContext(ctx context.Context, w io.Writer, m image.Image, o *Options, 
 		return err
 	}
 	if !opaque {
-		return ErrAlphaUnsupported
+		return encodeTransparentStill(ctx, w, m, cfg, limits)
 	}
 	// An external writer may return any error, including one matching an
 	// internal limit type. Never translate a writer error into our own refusal.

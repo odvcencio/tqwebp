@@ -1,6 +1,6 @@
 # tqwebp
 
-tqwebp encodes **opaque still images as lossy WebP in pure Go**. It needs no
+tqwebp encodes **still and animated WebP with lossy color and exact raw alpha in pure Go**. It needs no
 cgo, native library, WebAssembly runtime, or external encoder process.
 The API follows `image/jpeg`: `Encode(io.Writer, image.Image, *Options)`.
 Go 1.26 or newer is required. The package name is `webp`.
@@ -18,17 +18,17 @@ to a consumer module. See the changelog for unreleased changes.
 |---|---|
 | Opaque RGB, grayscale, YCbCr, paletted, CMYK, and other `image.Image` values | Converted to BT.601 limited-range 4:2:0; nonzero bounds and subimages supported |
 | Encoding dimensions | 1–16383 pixels on each axis; optional smaller caller limits |
-| Transparent encoding | Rejected with `ErrAlphaUnsupported`; flatten over an explicit background if that suits the application |
+| Transparent encoding | Lossy color plus exact raw 8-bit alpha; no implicit flattening |
 | ICC/EXIF/XMP container transport/editing | Experimental still/animated Demux/Mux; see [contract](docs/container.md) |
-| Lossless/transparent pixel encoding, animation pixel encoding | Not implemented |
+| Animation encoding | EncodeAll full-canvas replacement frames, exact timing/loops and selected metadata |
+| Lossless color / compressed alpha encoding | Not implemented; optional follow-on optimization |
 | Decoding | Native VP8/VP8L stills + raw/compressed ALPH; NRGBA, exact lossless channels, nearest chroma for VP8. Bounded Reader/DecodeAll animation composition; see [animation](docs/animation.md) and [decoding limits](docs/decoding.md) |
 | Determinism | Integer coding, fixed search order; repeated encodes and GOMAXPROCS tests check identical bytes |
 
-Animation composition and owned document decoding are available through
-Reader/DecodeAll. Transparent and animation pixel encoding, CLI workflows and
-full decoder/browser qualification remain required milestones. The encoder is
-still opaque/lossy; still decoding accepts both codec families and raw/compressed
-alpha. See the
+Reader/DecodeAll compose animations; EncodeAll writes full-canvas replacement
+frames with exact timing and selected metadata. Transparent still encoding uses
+raw alpha, while decoding accepts both codec families and raw/compressed alpha.
+CLI workflows and full decoder/browser qualification remain required. See the
 [API compatibility contract](docs/api.md) for the supported foundation.
 
 Inputs must satisfy the `image.Image` contract, including valid pixel storage.
@@ -40,7 +40,7 @@ when exact pixels or small colored text matter.
 ```go
 import webp "m31labs.dev/tqwebp"
 
-// img is a decoded, opaque image.Image.
+// img is a decoded image.Image; transparency is preserved.
 f, err := os.Create("photo.webp")
 if err != nil {
     return err
@@ -99,7 +99,7 @@ bytes as `Encode`.
 Both entry points report nil images, typed nil images, empty or inverted
 bounds as `ErrInvalidImage`; nil writers as `ErrInvalidWriter`; out-of-range
 options as `ErrInvalidOptions`; and VP8 dimension overflow as `ErrTooLarge`.
-Unsupported alpha and input/limit validation fail before any output writes.
+Input/limit validation fails before any output writes.
 Writer errors are returned unchanged, and short writes return
 `io.ErrShortWrite`. A writer failure can leave a partial destination file;
 write to a temporary file and rename after success when atomic output matters.
@@ -198,7 +198,7 @@ conversion constants retain the notice under [third_party](third_party/libwebp-C
 The separate [`container` package](docs/container.md) supports bounded still/animated-WebP
 inspection and ICC/EXIF/XMP edits without recompressing payloads. It is structural
 transport, not pixel decoding. Root native VP8/VP8L still decoding is now
-available, including [Reader/DecodeAll composition](docs/animation.md); animation pixel encoding and full qualification remain required work. The existing pixel encoder and its defaults are unchanged.
+available, including [Reader/DecodeAll composition](docs/animation.md); CLI and full qualification remain required work. The existing opaque encoder bytes and defaults are unchanged.
 
 ## Intermediate still decoding
 
@@ -211,3 +211,7 @@ fancy upsampling: [pixel policy, resource audit and remaining gates](docs/decodi
 
 VP8L and compressed alpha use an allocation-budgeted native adaptation; see
 [allocation, framing and qualification audit](docs/lossless-decoding.md).
+
+## Transparent and animated encoding
+
+The familiar Encode call now preserves transparent input using native VP8 plus raw ALPH. Use EncodeAll for full-canvas animation and explicitly selected metadata. See [pixel, ownership and output contracts](docs/encoding-alpha-animation.md), including the opaque-only migration recipe.

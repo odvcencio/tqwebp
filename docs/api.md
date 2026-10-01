@@ -2,7 +2,7 @@
 
 This contract covers the existing encoder plus the P1/P2 foundation. The
 reference source is `efac282eaa5a1248847a89381033398bca1a2929`. It does not claim
-animation or transparent pixel encoding support. The public decoder supports
+compressed-alpha or lossless-color encoding. [Transparent still and animation encoding](encoding-alpha-animation.md) is now available. The public decoder supports
 VP8/VP8L and raw/compressed ALPH stills plus [composed animation](animation.md).
 The experimental [container API](container.md) transports still/animation metadata.
 
@@ -17,7 +17,7 @@ The experimental [container API](container.md) transports still/animation metada
 - Nil/zero options mean quality 75 and method 4; zero limits add no caller cap
 - Methods 1–4 retain the same path; methods 5/6 remain experimental
 - Opaque lossy stills only; quality 100 remains lossy 4:2:0
-- Transparent inputs return `ErrAlphaUnsupported`; no implicit flattening
+- Transparent inputs now preserve raw 8-bit alpha; this is an explicit supported-input expansion, with no implicit flattening
 - Nonzero bounds and valid standard/custom `image.Image` values are supported
 - Writers receive identical bytes for the same supported input/options; output
   caps include framing/padding and refusals write nothing
@@ -83,8 +83,7 @@ hard timeout for blocked callbacks.
 
 ## Required remaining toolkit work
 
-The completed usability product still requires exact alpha encoding, animation
-pixel encoding (EncodeAll), CLI workflows, broad holdout/browser qualification
+The completed usability product still requires CLI workflows, broad holdout/browser qualification
 and full release qualification. Root codecs remain pinned native audited
 adaptations; runtime foreign decoders and the oracle stay outside its import graph.
 
