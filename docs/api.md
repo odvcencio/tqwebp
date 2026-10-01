@@ -2,7 +2,8 @@
 
 This contract covers the existing encoder plus the P1/P2 foundation. The
 reference source is `efac282eaa5a1248847a89381033398bca1a2929`. It does not claim
-animation, alpha or public decoding support. The separate experimental
+animation or transparent encoding support. The intermediate public decoder
+supports VP8 stills and raw ALPH; see [decoding](decoding.md). The separate experimental
 [container foundation](container.md) now transports and edits still-file metadata.
 
 ## Existing callers remain compatible
@@ -84,8 +85,8 @@ hard timeout for blocked callbacks.
 
 The experimental still-container metadata foundation is described separately.
 The completed usability product still requires animation-container integration,
-exact alpha encoding/decoding, native VP8 and
-VP8L decoding, document metadata integration, animation reading/composition/encoding, CLI workflows and full
+exact alpha encoding, compressed-alpha and
+VP8L decoding, full VP8 decoder qualification, document metadata integration, animation reading/composition/encoding, CLI workflows and full
 release qualification. The selected decoder route remains pinned native
 `x/image/vp8` and `vp8l` adapters with audited resources/cancellation; this
 tranche neither changes that policy nor introduces those imports. The encoder

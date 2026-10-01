@@ -1,0 +1,63 @@
+{
+  "module": "golang.org/x/image",
+  "version": "v0.38.0",
+  "module_sum": "h1:5l+q+Y9JDC7mBOMjo4/aPhMDcxEptsX+Tt3GgRQRPuE=",
+  "source": "https://cs.opensource.google/go/x/image/+/refs/tags/v0.38.0:vp8/",
+  "license": "BSD-3-Clause; original LICENSE and per-file notices retained",
+  "maintenance": "tqwebp maintainers must track x/image VP8 security fixes and re-audit allocations/cancellation on each update",
+  "adaptation": [
+    "Remove canonical import comment for internal package",
+    "DecodeFrame takes context; check reconstruction/filter macroblocks",
+    "Read partition input in <=4096-byte context-checked reads",
+    "Check first partition length before allocation",
+    "Reject invalid Reader counts and 100 consecutive zero-progress reads",
+    "Preserve non-EOF final-byte Reader errors; accept complete final EOF"
+  ],
+  "files": [
+    {
+      "file": "decode.go",
+      "upstream_sha256": "9d738122d496eda99e39e358e4c41d13fcbe7d17a5f0b68b563f2dd1d544629d",
+      "adapted_sha256": "408930d9832a734da60b4aaaa61169e67a688baa936f35e2432495f58bccba19"
+    },
+    {
+      "file": "filter.go",
+      "upstream_sha256": "7b0196140613dd37ab2eb3aece987b3839289731741ac9fca52f8000c818e653",
+      "adapted_sha256": "35349dd85bd35f1d5b9b5d00a50f09c7ceb572014ae13fec306cc1884e595762"
+    },
+    {
+      "file": "idct.go",
+      "upstream_sha256": "b6b27996e730f34d7cc614392cd511eef98b02c44f42659d04294c7b1d9b0594",
+      "adapted_sha256": "b6b27996e730f34d7cc614392cd511eef98b02c44f42659d04294c7b1d9b0594"
+    },
+    {
+      "file": "partition.go",
+      "upstream_sha256": "6d9d2cfd7ea2207297ff76509733c1135dba3c1dfdc2eed2afcbcdc977a632d2",
+      "adapted_sha256": "6d9d2cfd7ea2207297ff76509733c1135dba3c1dfdc2eed2afcbcdc977a632d2"
+    },
+    {
+      "file": "pred.go",
+      "upstream_sha256": "791ceebb5f99b762441d56ab00c3e6fa3475416b93be2c48890b740830631dcf",
+      "adapted_sha256": "791ceebb5f99b762441d56ab00c3e6fa3475416b93be2c48890b740830631dcf"
+    },
+    {
+      "file": "predfunc.go",
+      "upstream_sha256": "0df4ca0eaa5cdbe562e4f11572279e5717d0ce18aa2f3dfb14adac329062cb67",
+      "adapted_sha256": "0df4ca0eaa5cdbe562e4f11572279e5717d0ce18aa2f3dfb14adac329062cb67"
+    },
+    {
+      "file": "quant.go",
+      "upstream_sha256": "b806d2f3a849c648fe394d2812d2386e30148c8545e939dda2f2c47c3628fb14",
+      "adapted_sha256": "b806d2f3a849c648fe394d2812d2386e30148c8545e939dda2f2c47c3628fb14"
+    },
+    {
+      "file": "reconstruct.go",
+      "upstream_sha256": "72a34c52982880ce3103101e66871acc542ccbfe3fcf5c45e56bf887f8621950",
+      "adapted_sha256": "72a34c52982880ce3103101e66871acc542ccbfe3fcf5c45e56bf887f8621950"
+    },
+    {
+      "file": "token.go",
+      "upstream_sha256": "644a520b7b3102757947ef346cd95da5d6fbed1993513b15eb27ad16008a987c",
+      "adapted_sha256": "644a520b7b3102757947ef346cd95da5d6fbed1993513b15eb27ad16008a987c"
+    }
+  ]
+}

@@ -44,6 +44,9 @@ jobs:
             exit 1
           fi
 
+      - name: Offline decoder fixture generator tests
+        run: python3 -m unittest discover -s tools -p test_generate_decode_fixtures.py
+
       - name: Test (oracle self-tests + baseline golden regeneration-check)
         run: go test -count=1 ./...
 
@@ -57,6 +60,7 @@ jobs:
           go test . -run '^$' -fuzz '^FuzzEncodeAPI$' -fuzztime=10s
           go test ./internal/encoder -run '^$' -fuzz '^FuzzEncode$' -fuzztime=10s
           go test ./container -run '^$' -fuzz '^FuzzDemux$' -fuzztime=10s
+          go test . -run '^$' -fuzz '^FuzzDecodeStill$' -fuzztime=10s
 
       - name: Module graph stays pure (stdlib, golang.org/x, turboquant only)
         run: |
@@ -67,11 +71,11 @@ jobs:
             exit 1
           fi
 
-      - name: Encoder import graph carries no oracle and no x/image
+      - name: Root import graph permits only reviewed native decoder packages
         run: |
-          bad="$(go list -deps m31labs.dev/tqwebp | grep -E 'golang.org/x/image|m31labs.dev/tqwebp/oracle' || true)"
+          bad="$(go list -deps m31labs.dev/tqwebp | grep -E 'golang.org/x/image|m31labs.dev/tqwebp/oracle' | grep -v -E '^golang.org/x/image/(vp8|vp8l)$' || true)"
           if [ -n "$bad" ]; then
-            echo "::error::the encoder imports a test-only dependency:"
+            echo "::error::the root imports an unreviewed decoder or oracle dependency:"
             echo "$bad"
             exit 1
           fi

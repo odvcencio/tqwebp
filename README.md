@@ -21,7 +21,7 @@ to a consumer module. See the changelog for unreleased changes.
 | Transparency | Rejected with `ErrAlphaUnsupported`; flatten over an explicit background if that suits the application |
 | ICC/EXIF/XMP container transport/editing | Experimental still-only Demux/Mux; see [contract](docs/container.md) |
 | Lossless encoding, animation | Not implemented |
-| Decoding | Not provided; use an independent WebP decoder |
+| Decoding | Intermediate native VP8 stills + raw ALPH; NRGBA with nearest chroma. VP8L/compressed ALPH and composed animation remain required work; see [decoding limits](docs/decoding.md) |
 | Determinism | Integer coding, fixed search order; repeated encodes and GOMAXPROCS tests check identical bytes |
 
 Animation, document metadata workflows and complete VP8/VP8L decoding remain required
@@ -185,11 +185,21 @@ use `tools/libwebp_baseline.py`.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT for tqwebp-authored code. See [LICENSE](LICENSE). The adapted VP8 decoder
+and upstream fixtures retain their Go Authors BSD license; libwebp-derived
+conversion constants retain the notice under [third_party](third_party/libwebp-COPYING).
 
 ## Container and metadata foundation
 
 The separate [`container` package](docs/container.md) supports bounded still-WebP
 inspection and ICC/EXIF/XMP edits without recompressing payloads. It is structural
-transport, not pixel decoding; native VP8/VP8L decoding and animation remain
+transport, not pixel decoding; complete native VP8/VP8L decoding and animation remain
 required work. The existing pixel encoder and its defaults are unchanged.
+
+## Intermediate still decoding
+
+`Decode` / `DecodeContext` return real NRGBA pixels for VP8 and raw ALPH stills.
+`DecodeConfig` is only bounded header inspection, including unsupported pixel
+forms. Import `m31labs.dev/tqwebp/register` explicitly for `image.Decode`.
+Animation is rejected, never flattened. Nearest chroma is not libwebp default
+fancy upsampling: [pixel policy, resource audit and remaining gates](docs/decoding.md).

@@ -3,6 +3,17 @@
 
 ## Unreleased
 
+- Intermediate P5/P6 decoding slice: Decode, DecodeContext, DecodeConfig and
+  explicit register package. Native VP8 still pixels and raw ALPH filters;
+  conservative ReadLimits and per-macroblock cancellation adaptation.
+- Pinned BSD x/image v0.38.0 VP8 implementation with audited source adaptation,
+  not a new codec or foreign-runtime wrapper. Independently qualified against
+  libwebp 1.5.0 no-fancy RGBA fixtures. Nearest chroma deliberately differs from
+  libwebp default fancy upsampling.
+- VP8L, compressed ALPH, animation, transparent encoding and full browser/security
+  qualification remain required. Config inspection is not pixel support.
+
+
 - Add an experimental public still `container` Demux/Mux foundation with bounded
   RIFF/VP8X/header checks, owned opaque metadata and compressed-payload-preserving
   edits. Preserve duplicate metadata and explicitly retained unknown chunks.

@@ -1,0 +1,5 @@
+# Oracle images and raw RGBA are byte fixtures, not reviewable text.
+testdata/decode/*.rgba binary
+testdata/decode/*.webp binary
+# Preserve the literal upstream unified-diff context lines.
+internal/vp8decode/upstream-adaptation.patch -whitespace
