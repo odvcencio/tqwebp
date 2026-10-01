@@ -5,7 +5,8 @@ lossless-compressed ALPH. The root Decode/DecodeContext API returns owned NRGBA;
 VP8L channels are exact, including encoded hidden RGB under zero alpha. Raw and
 compressed ALPH both support all four alpha filters. VP8 still retains the
 separate documented nearest-chroma/limited-range BT.601 policy. No ICC transform
-is performed. Animation remains explicitly refused, never flattened.
+is performed. Decode/DecodeContext refuse animation, never flattening it;
+use the separate Reader/DecodeAll composition APIs.
 
 ## Pinned native implementation
 
@@ -123,7 +124,8 @@ transforms, sparse huge table indices, impossible group lengths, overlapping and
 out-of-bounds back references, truncation and tiny budgets. Fuzzing is bounded
 by input/pixel/allocation limits.
 
-This does not complete animation, transparent encoding, Document/Reader/DecodeAll,
-CLI, browser comparisons, broad holdout coverage, sustained fuzzing, external
-security review or adversarial wall-clock cancellation qualification. Those
-remain mandatory work; a completed still decoder is not a completed toolkit.
+The [animation slice](animation.md) adds Reader/DecodeAll and composition.
+Transparent and animation pixel encoding, CLI, browser comparisons, broad
+holdout coverage, sustained fuzzing, external security review and adversarial
+wall-clock cancellation qualification remain mandatory work; a completed still
+decoder is not a completed toolkit.

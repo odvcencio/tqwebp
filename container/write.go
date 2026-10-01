@@ -8,7 +8,7 @@ import (
 	"io"
 )
 
-// Mux validates and buffers a canonical still container before the first write.
+// Mux validates and buffers a canonical container before the first write.
 // Invalid input, cancellation during preparation and policy refusals write no
 // caller bytes. Writer errors are unchanged; short writes return io.ErrShortWrite.
 // Cancellation or I/O failure after output begins may leave partial output.
@@ -30,13 +30,19 @@ func Mux(ctx context.Context, w io.Writer, f *File, limits Limits) error {
 	if err = check("frames", int64(len(f.Frames)), l.MaxFrames); err != nil {
 		return err
 	}
-	if f.Animated || f.LoopCount != 0 || f.Background != (color.NRGBA{}) {
+	if f.Animated {
+		return muxAnimated(ctx, w, f, l)
+	}
+	if f.LoopCount != 0 || f.Background != (color.NRGBA{}) {
 		return format(0, "ANIM", ErrUnsupportedFeature)
 	}
 	if len(f.Frames) != 1 {
 		return format(0, "", ErrUnsupportedFeature)
 	}
 	frame := f.Frames[0]
+	if len(frame.UnknownChunks) != 0 {
+		return format(0, "ANMF", ErrInvalidFormat)
+	}
 	if frame.Blend > BlendReplace || frame.Dispose > DisposeBackground {
 		return format(0, "ANMF", ErrInvalidFormat)
 	}

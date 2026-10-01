@@ -1,18 +1,6 @@
-# Still-container and metadata foundation
+# Container and metadata transport
 
-The new container API is experimental until P8 animation integration. Its planned
-File animation fields and frame Duration/Blend/Dispose controls are present, but
-Mux rejects Animated, nonzero loop/background/duration, BlendReplace, or
-DisposeBackground. Unknown enum values are invalid. Only a single still frame
-with zero animation controls works today; no animation encoding is implied.
-
-`m31labs.dev/tqwebp/container` provides bounded structural inspection and
-compressed-payload-preserving remux for still WebP. It accepts VP8, VP8L and
-extended still headers, transports ALPH, and reads/writes opaque ICCP, EXIF and
-XMP payloads. It does **not** decode entropy-coded pixels, validate profiles,
-apply orientation, parse TIFF/XML, transform color, or compose animation.
-Animation declarations/ANMF return `ErrUnsupportedFeature`. Root VP8/VP8L still pixel decoding is now available; animation and full decoder
-qualification remain required subsequent milestones. See [lossless decoding](lossless-decoding.md).
+The experimental container API provides bounded structural inspection and canonical compressed-payload-preserving remux for still and animated WebP. VP8, VP8L, ALPH, ANIM/ANMF controls, opaque ICC/EXIF/XMP, ordered file-level unknown chunks and ordered per-frame unknown chunks are supported. It does not decode entropy-coded pixels, validate profiles, apply orientation, parse TIFF/XML or compose pixels; use the root [Reader/DecodeAll APIs](animation.md) for composition. Invalid controls, rectangles, framing and enum values are rejected.
 
 The existing root encoder, Options, Limits, defaults, error precedence and
 opaque output bytes are unchanged. Root `Metadata` aliases `container.Metadata`;
@@ -89,8 +77,8 @@ Zero-valued `container.Limits` fields select these defaults:
 | MaxRetainedBytes | 64 MiB |
 
 Positive values override each default; negative values return ErrInvalidLimits.
-The frame limit is enforced before Mux rejects unsupported multi-frame files;
-Demux currently accepts at most one still frame and rejects animation.
+Demux and Mux bound the stored animation frame count. A still contains one
+frame; playback loop counts never expand the stored frames or parsing work.
 Input/output counts include all RIFF framing/padding. Metadata counts every
 occurrence. Retained bytes is an aggregate payload budget, including unknown
 and ignored chunk payloads; it excludes object overhead and caller storage.
@@ -107,7 +95,8 @@ deadlines for hard I/O bounds; no goroutines are launched to race callbacks.
 
 Use container's ErrInvalidFormat, ErrUnsupportedFeature, ErrInvalidMetadata,
 ErrLimitExceeded and typed FormatError/LimitError. FormatError reports an offset,
-chunk FourCC and frame=-1 for this still-only tranche. Truncation retains
+chunk FourCC and a zero-based frame index when identified; file-level errors
+use frame=-1. Truncation retains
 io.ErrUnexpectedEOF and malformed classification. Other reader errors remain
 available through errors.Is. Writer errors return unchanged; short writes return
 io.ErrShortWrite. Error text is diagnostic, not a stable parsing interface.
@@ -130,3 +119,7 @@ Primary format references:
 - https://developers.google.com/speed/webp/docs/riff_container
 - https://datatracker.ietf.org/doc/html/rfc9649
 - https://datatracker.ietf.org/doc/html/rfc6386#section-19.1
+
+## Animation canonical layout
+
+Animation Mux writes VP8X, ICC metadata, ANIM, ANMF frames, non-ICC metadata, then file-level unknown chunks. Within each ANMF, ALPH precedes its VP8 payload (or VP8L stands alone), followed by ordered per-frame unknown chunks. Unknown payloads and relative order within their list survive, as do duplicate metadata payloads. Original interleaving, padding layout and extension bytes are not preserved byte-for-byte. No raw-layout mode is provided. Mux transports already encoded frame payloads; it is not a pixel animation encoder.

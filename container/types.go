@@ -1,6 +1,6 @@
-// Package container inspects and remuxes WebP still containers without decoding
-// pixels. Payload validation covers headers and container structure, not entropy
-// coding. Animation is explicitly unsupported in this foundation release.
+// Package container inspects and remuxes WebP still and animated containers
+// without decoding pixels. Validation covers headers and container structure,
+// not entropy coding or displayed-frame composition.
 package container
 
 import (
@@ -113,7 +113,7 @@ type Chunk struct {
 	Data   []byte
 }
 
-// Blend selects how an animation frame is drawn (not yet supported).
+// Blend selects how an animation frame is drawn.
 type Blend uint8
 
 const (
@@ -121,7 +121,7 @@ const (
 	BlendReplace
 )
 
-// Dispose selects post-frame animation disposal (not yet supported).
+// Dispose selects post-frame animation disposal.
 type Dispose uint8
 
 const (
@@ -130,14 +130,17 @@ const (
 )
 
 // EncodedFrame carries exactly one VP8 or VP8L payload; ALPH requires VP8.
-// This still-only implementation requires zero Duration, BlendOver, DisposeNone
-// and Rect equal to the origin-based canvas. Animation fields are experimental.
+// Stills require zero Duration, BlendOver, DisposeNone and the full canvas.
+// Animated rectangles have even nonnegative origins and exact millisecond timing.
 type EncodedFrame struct {
 	Duration        time.Duration
 	Blend           Blend
 	Dispose         Dispose
 	Rect            image.Rectangle
 	VP8, VP8L, ALPH []byte
+	// UnknownChunks are ANMF subchunks, preserved in their relative order.
+	// Canonical Mux writes them after the frame codec; stills require none.
+	UnknownChunks []Chunk
 }
 
 // File owns all payloads returned by Demux. Mux does not mutate them. Concurrent
@@ -145,8 +148,8 @@ type EncodedFrame struct {
 // UnknownChunks remain in their relative order; canonical Mux places them last.
 // Extended records whether VP8X was present. Mux also adds VP8X when required.
 type File struct {
-	// Animation controls are reserved for the documented P8 implementation.
-	// Mux currently rejects Animated or any nonzero animation controls.
+	// Animated distinguishes even a one-frame animation from a still.
+	// LoopCount zero means infinite playback; nonzero means total plays.
 	Animated   bool
 	LoopCount  uint16
 	Background color.NRGBA
