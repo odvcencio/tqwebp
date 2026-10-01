@@ -126,6 +126,6 @@ by input/pixel/allocation limits.
 
 The [animation slice](animation.md) adds Reader/DecodeAll and composition.
 [Transparent and animation encoding](encoding-alpha-animation.md) is now supported.
-CLI, browser comparisons, broad holdout coverage, sustained fuzzing, external
+The [CLI](cli.md) is now implemented. Browser comparisons, broad holdout coverage, sustained fuzzing, external
 security review and adversarial wall-clock cancellation qualification remain
 mandatory work; a completed codec layer is not a completed toolkit.

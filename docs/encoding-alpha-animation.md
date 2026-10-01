@@ -96,7 +96,7 @@ replacement holes, timing, loops and selected metadata are checked independently
 Fixtures/tools do not become runtime dependencies.
 
 Browser compositing, sustained fuzzing, broad holdout/performance and platform
-runtime gates remain separate release requirements. CLI is the next checkpoint.
+runtime gates remain separate release requirements. The [CLI](cli.md) is now implemented; its platform/runtime and release qualification is documented separately.
 A passing bounded test suite or scoped source review is not formal security approval.
 
 Primary container specification: https://developers.google.com/speed/webp/docs/riff_container

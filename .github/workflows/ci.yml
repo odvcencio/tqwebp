@@ -66,6 +66,9 @@ jobs:
         env:
           GOMAXPROCS: "2"
         run: |
+          go test ./internal/cli -run '^$' -fuzz '^FuzzCLIMetadata$' -fuzztime=10s
+          go test ./internal/cli -run '^$' -fuzz '^FuzzCLIManifest$' -fuzztime=10s
+          go test ./internal/cli -run '^$' -fuzz '^FuzzCLIStdin$' -fuzztime=10s
           go test . -run '^$' -fuzz '^FuzzEncodeAPI$' -fuzztime=10s
           go test . -run '^$' -fuzz '^FuzzEncodeDocument$' -fuzztime=10s
           go test ./internal/encoder -run '^$' -fuzz '^FuzzEncode$' -fuzztime=10s

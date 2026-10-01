@@ -86,6 +86,6 @@ source review and bounded gates do not constitute formal security approval.
 ## Remaining usability work
 
 [Transparent and EncodeAll encoding](encoding-alpha-animation.md) is now supported.
-CLI workflows and broad browser/holdout/release qualification remain required. Canonical Mux remuxes
+[CLI workflows](cli.md) are now implemented; broad browser/holdout/release qualification remains required. Canonical Mux remuxes
 existing compressed frames without recompression; it does not provide byte-exact
 original RIFF layout preservation ; pixel animation encoding uses the separate EncodeAll API.

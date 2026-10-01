@@ -83,9 +83,11 @@ hard timeout for blocked callbacks.
 
 ## Required remaining toolkit work
 
-The completed usability product still requires CLI workflows, broad holdout/browser qualification
+The completed usability product still requires broad holdout/browser qualification
 and full release qualification. Root codecs remain pinned native audited
 adaptations; runtime foreign decoders and the oracle stay outside its import graph.
 
 No tagged release, publication or browser/runtime qualification is implied by
 these foundation tests.
+
+The [CLI](cli.md) provides conversion, manifests, extraction, inspection and raw metadata remux through these public APIs.
