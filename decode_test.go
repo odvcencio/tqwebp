@@ -90,13 +90,13 @@ func TestDecodeRefusalAndHeaderOnly(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = Decode(bytes.NewReader(lossless)); e != ErrUnsupportedFeature {
+	if _, e = Decode(bytes.NewReader(lossless)); e != nil {
 		t.Fatal(e)
 	}
 	if _, e = DecodeConfig(bytes.NewReader(lossless)); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = Decode(bytes.NewReader(decodeFixture(t, "compressed-alpha.webp"))); e != ErrUnsupportedFeature {
+	if _, e = Decode(bytes.NewReader(decodeFixture(t, "compressed-alpha.webp"))); e != nil {
 		t.Fatal(e)
 	}
 	anim := decodeFixture(t, "alpha-filter-0.webp")

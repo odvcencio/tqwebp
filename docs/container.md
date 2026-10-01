@@ -11,8 +11,8 @@ compressed-payload-preserving remux for still WebP. It accepts VP8, VP8L and
 extended still headers, transports ALPH, and reads/writes opaque ICCP, EXIF and
 XMP payloads. It does **not** decode entropy-coded pixels, validate profiles,
 apply orientation, parse TIFF/XML, transform color, or compose animation.
-Animation declarations/ANMF return `ErrUnsupportedFeature`. Complete native
-VP8/VP8L pixel decoding and animation remain required subsequent milestones.
+Animation declarations/ANMF return `ErrUnsupportedFeature`. Root VP8/VP8L still pixel decoding is now available; animation and full decoder
+qualification remain required subsequent milestones. See [lossless decoding](lossless-decoding.md).
 
 The existing root encoder, Options, Limits, defaults, error precedence and
 opaque output bytes are unchanged. Root `Metadata` aliases `container.Metadata`;

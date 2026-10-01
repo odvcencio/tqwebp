@@ -12,6 +12,7 @@ import (
 
 	"m31labs.dev/tqwebp/container"
 	vp8 "m31labs.dev/tqwebp/internal/vp8decode"
+	vp8l "m31labs.dev/tqwebp/internal/vp8ldecode"
 )
 
 var (
@@ -140,10 +141,10 @@ func riffHeader(ctx context.Context, r io.Reader, l ReadLimits) ([12]byte, int64
 	return h, n, nil
 }
 
-// Decode decodes a VP8 still, including raw ALPH with all four filters, to
+// Decode decodes VP8/VP8L stills, including raw or compressed ALPH, to
 // independently owned NRGBA pixels. It uses limited-range BT.601 and nearest
-// 4:2:0 chroma, not libwebp's default fancy upsampling. VP8L and compressed ALPH
-// are not yet supported. Animation returns ErrAnimatedImage, never frame zero.
+// 4:2:0 chroma for VP8, not libwebp's default fancy upsampling. VP8L preserves
+// exact RGBA, including hidden RGB. Animation returns ErrAnimatedImage, never frame zero.
 // Metadata is discarded; container.Demux provides byte-preserving metadata.
 func Decode(r io.Reader) (image.Image, error) {
 	return DecodeContext(context.Background(), r, ReadLimits{})
@@ -233,11 +234,24 @@ func DecodeContext(ctx context.Context, r io.Reader, limits ReadLimits) (image.I
 		}
 	}
 	frame := f.Frames[0]
-	if len(frame.VP8L) > 0 {
-		return nil, ErrUnsupportedFeature
+	used := base
+	reserve := func(n int64) error {
+		if n < 0 || n > int64(int(^uint(0)>>1))-used {
+			return &LimitError{"working_bytes", l.MaxWorkingBytes, -1}
+		}
+		next := used + n
+		if err := readCheck("working_bytes", next, l.MaxWorkingBytes); err != nil {
+			return err
+		}
+		used = next
+		return nil
 	}
-	if len(frame.ALPH) > 0 && frame.ALPH[0]&3 != 0 {
-		return nil, ErrUnsupportedFeature
+	if len(frame.VP8L) > 0 {
+		out, e := vp8l.Decode(ctx, frame.VP8L, int(w), int(ht), false, reserve)
+		if e != nil {
+			return nil, losslessError(ctx, "VP8L", e)
+		}
+		return out, nil
 	}
 	// 384 bytes/MB for padded YUV, four filter bytes/MB, six predictor
 	// bytes/column, <= compressed payload bytes for partition copies, output.
@@ -249,6 +263,7 @@ func DecodeContext(ctx context.Context, r io.Reader, limits ReadLimits) (image.I
 	if working > int64(int(^uint(0)>>1)) {
 		return nil, &LimitError{"working_bytes", int64(int(^uint(0) >> 1)), working}
 	}
+	used = working
 	d := vp8.NewDecoder()
 	d.Init(bytes.NewReader(frame.VP8), len(frame.VP8))
 	fh, err := d.DecodeFrameHeader()
@@ -279,10 +294,21 @@ func DecodeContext(ctx context.Context, r io.Reader, limits ReadLimits) (image.I
 		}
 	}
 	if len(frame.ALPH) > 0 {
-		if err = decodeRawAlpha(ctx, out, frame.ALPH); err != nil {
+		if frame.ALPH[0]&3 == 0 {
+			err = decodeRawAlpha(ctx, out, frame.ALPH)
+		} else {
+			var residual *image.NRGBA
+			residual, err = vp8l.Decode(ctx, frame.ALPH[1:], int(w), int(ht), true, reserve)
+			if err != nil {
+				return nil, losslessError(ctx, "ALPH", err)
+			}
+			err = unfilterAlpha(ctx, out, frame.ALPH[0], residual.Pix[1:], 4)
+		}
+		if err != nil {
 			return nil, err
 		}
 	}
+
 	return out, ctx.Err()
 }
 
@@ -304,8 +330,11 @@ func limitedRGB(y, u, v int) (uint8, uint8, uint8) {
 	return clip(((19077 * y >> 8) + (26149 * v >> 8) - 14234) >> 6), clip(((19077 * y >> 8) - (6419 * u >> 8) - (13320 * v >> 8) + 8708) >> 6), clip(((19077 * y >> 8) + (33050 * u >> 8) - 17685) >> 6)
 }
 func decodeRawAlpha(ctx context.Context, out *image.NRGBA, a []byte) error {
+	return unfilterAlpha(ctx, out, a[0], a[1:], 1)
+}
+func unfilterAlpha(ctx context.Context, out *image.NRGBA, header byte, residual []byte, step int) error {
 	w, h := out.Rect.Dx(), out.Rect.Dy()
-	filter := (a[0] >> 2) & 3
+	filter := (header >> 2) & 3
 	for y := 0; y < h; y++ {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -337,15 +366,15 @@ func decodeRawAlpha(ctx context.Context, out *image.NRGBA, a []byte) error {
 					}
 				}
 			}
-			out.Pix[y*out.Stride+4*x+3] = byte(int(a[1+y*w+x]) + pred)
+			out.Pix[y*out.Stride+4*x+3] = byte(int(residual[(y*w+x)*step]) + pred)
 		}
 	}
 	return nil
 }
 
 // DecodeConfig inspects bounded headers, not entropy data or whole-file validity.
-// It can report VP8L and animated canvas dimensions even though Decode rejects
-// these forms in this tranche. Its color model is NRGBA, with no ICC transform.
+// It can report animated canvas dimensions even though Decode rejects animation.
+// Its color model is NRGBA, with no ICC transform.
 func DecodeConfig(r io.Reader) (image.Config, error) {
 	ctx := context.Background()
 	l := DefaultReadLimits()
@@ -408,4 +437,14 @@ func DecodeConfig(r io.Reader) (image.Config, error) {
 		return result, err
 	}
 	return image.Config{ColorModel: color.NRGBAModel, Width: int(w), Height: int(h)}, nil
+}
+
+func losslessError(ctx context.Context, id string, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if errors.Is(err, ErrLimitExceeded) {
+		return err
+	}
+	return decodeError(-1, id, err)
 }

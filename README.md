@@ -17,15 +17,16 @@ to a consumer module. See the changelog for unreleased changes.
 | Capability | Behavior |
 |---|---|
 | Opaque RGB, grayscale, YCbCr, paletted, CMYK, and other `image.Image` values | Converted to BT.601 limited-range 4:2:0; nonzero bounds and subimages supported |
-| Dimensions | 1–16383 pixels on each axis; optional smaller caller limits |
-| Transparency | Rejected with `ErrAlphaUnsupported`; flatten over an explicit background if that suits the application |
+| Encoding dimensions | 1–16383 pixels on each axis; optional smaller caller limits |
+| Transparent encoding | Rejected with `ErrAlphaUnsupported`; flatten over an explicit background if that suits the application |
 | ICC/EXIF/XMP container transport/editing | Experimental still-only Demux/Mux; see [contract](docs/container.md) |
 | Lossless encoding, animation | Not implemented |
-| Decoding | Intermediate native VP8 stills + raw ALPH; NRGBA with nearest chroma. VP8L/compressed ALPH and composed animation remain required work; see [decoding limits](docs/decoding.md) |
+| Decoding | Native VP8/VP8L stills + raw/compressed ALPH; NRGBA, exact lossless channels, nearest chroma for VP8. Composed animation remains required work; see [decoding limits](docs/decoding.md) |
 | Determinism | Integer coding, fixed search order; repeated encodes and GOMAXPROCS tests check identical bytes |
 
-Animation, document metadata workflows and complete VP8/VP8L decoding remain required
-toolkit milestones. This branch is still an opaque lossy encoder. See the
+Animation, document metadata workflows and full decoder qualification remain required
+toolkit milestones. The encoder is still opaque/lossy; native still decoding now
+accepts both codec families and raw/compressed alpha. See the
 [API compatibility contract](docs/api.md) for the supported foundation.
 
 Inputs must satisfy the `image.Image` contract, including valid pixel storage.
@@ -185,21 +186,25 @@ use `tools/libwebp_baseline.py`.
 
 ## License
 
-MIT for tqwebp-authored code. See [LICENSE](LICENSE). The adapted VP8 decoder
-and upstream fixtures retain their Go Authors BSD license; libwebp-derived
+MIT for tqwebp-authored code. See [LICENSE](LICENSE). The adapted VP8/VP8L decoders
+retain their Go Authors BSD license; image artwork attribution is recorded in
+[testdata/lossless](testdata/lossless/ATTRIBUTION.md). Libwebp-derived
 conversion constants retain the notice under [third_party](third_party/libwebp-COPYING).
 
 ## Container and metadata foundation
 
 The separate [`container` package](docs/container.md) supports bounded still-WebP
 inspection and ICC/EXIF/XMP edits without recompressing payloads. It is structural
-transport, not pixel decoding; complete native VP8/VP8L decoding and animation remain
-required work. The existing pixel encoder and its defaults are unchanged.
+transport, not pixel decoding. Root native VP8/VP8L still decoding is now
+available; animation and full decoder qualification remain required work. The existing pixel encoder and its defaults are unchanged.
 
 ## Intermediate still decoding
 
-`Decode` / `DecodeContext` return real NRGBA pixels for VP8 and raw ALPH stills.
+`Decode` / `DecodeContext` return real NRGBA pixels for VP8/VP8L and raw/compressed ALPH stills.
 `DecodeConfig` is only bounded header inspection, including unsupported pixel
 forms. Import `m31labs.dev/tqwebp/register` explicitly for `image.Decode`.
 Animation is rejected, never flattened. Nearest chroma is not libwebp default
 fancy upsampling: [pixel policy, resource audit and remaining gates](docs/decoding.md).
+
+VP8L and compressed alpha use an allocation-budgeted native adaptation; see
+[allocation, framing and qualification audit](docs/lossless-decoding.md).

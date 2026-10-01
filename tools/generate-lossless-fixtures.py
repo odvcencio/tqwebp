@@ -46,6 +46,8 @@ def bind_library(lib):
     lib.WebPEncodeRGBA.argtypes = [C.c_void_p, C.c_int, C.c_int, C.c_int, C.c_float, C.POINTER(C.c_void_p)]
     lib.WebPEncodeRGBA.restype = C.c_size_t
     lib.WebPFree.argtypes = [C.c_void_p]
+    lib.WebPEncodeLosslessRGBA.argtypes = [C.c_void_p, C.c_int, C.c_int, C.c_int, C.POINTER(C.c_void_p)]
+    lib.WebPEncodeLosslessRGBA.restype = C.c_size_t
     return lib
 
 
@@ -90,6 +92,39 @@ def riff(chunks):
     return b'RIFF' + struct.pack('<I', len(body)) + body
 
 
+def lossless(lib, raw, width, height):
+    ptr = C.c_void_p()
+    try:
+        size = lib.WebPEncodeLosslessRGBA(raw, width, height, width * 4, C.byref(ptr))
+        if not size:
+            raise RuntimeError('libwebp lossless encode failed')
+        return C.string_at(ptr, size)
+    finally:
+        if ptr.value:
+            lib.WebPFree(ptr)
+
+
+def payload(data, kind):
+    offset = 12
+    while offset < len(data):
+        size = struct.unpack('<I', data[offset + 4:offset + 8])[0]
+        if data[offset:offset + 4] == kind:
+            return data[offset + 8:offset + 8 + size]
+        offset += 8 + size + (size & 1)
+    raise ValueError(kind)
+
+
+class Bits:
+    def __init__(self):
+        self.bits = []
+
+    def put(self, value, count):
+        self.bits.extend((value >> i) & 1 for i in range(count))
+
+    def bytes(self):
+        return bytes(sum(self.bits[k + i] << i for i in range(min(8, len(self.bits) - k))) for k in range(0, len(self.bits), 8))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     for option in ['library', 'out', 'upstream']:
@@ -99,16 +134,18 @@ def main(argv=None):
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     records = []
-    for name in ['blue-purple-pink.lossy.webp', 'blue-purple-pink-large.no-filter.lossy.webp', 'blue-purple-pink-large.normal-filter.lossy.webp', 'blue-purple-pink-large.simple-filter.lossy.webp']:
-        save(lib, out, records, name, (pathlib.Path(args.upstream) / name).read_bytes(), 'golang.org/x/image v0.38.0/testdata/' + name)
-    for width, height in [(1, 1), (1, 17), (17, 1), (19, 17)]:
-        save(lib, out, records, f'pattern-{width}x{height}.webp', encode(lib, width, height), 'libwebp WebPEncodeRGBA quality 83; deterministic procedural pattern in this script')
-    payload = encode(lib, 19, 17)
-    vp8 = payload[20:20 + struct.unpack('<I', payload[16:20])[0]]
+    for path in sorted(pathlib.Path(args.upstream).glob('*.lossless.webp')):
+        save(lib, out, records, path.name, path.read_bytes(), 'golang.org/x/image v0.38.0/testdata/' + path.name)
+    path = pathlib.Path(args.upstream) / 'yellow_rose.lossy-with-alpha.webp'
+    save(lib, out, records, path.name, path.read_bytes(), 'golang.org/x/image v0.38.0/testdata/' + path.name)
+    for width, height in [(1, 1), (1, 17), (17, 1), (19, 17), (257, 33)]:
+        raw = bytes(c for y in range(height) for x in range(width) for c in ((x * 47 + y * 13) % 256, (x * 17 + y * 71) % 256, (x * 97 + y * 3) % 256, (x * 31 + y * 59) % 256))
+        save(lib, out, records, f'lossless-pattern-{width}x{height}.webp', lossless(lib, raw, width, height), 'libwebp WebPEncodeLosslessRGBA deterministic RGBA pattern')
     width, height = 19, 17
+    vp8 = payload(encode(lib, width, height), b'VP8 ')
     alpha = [(x * 31 + y * 59) % 256 for y in range(height) for x in range(width)]
     for filter_id in range(4):
-        filtered = []
+        residuals = []
         for y in range(height):
             for x in range(width):
                 prediction = 0
@@ -123,12 +160,46 @@ def main(argv=None):
                         prediction = alpha[(y - 1) * width + x]
                     else:
                         prediction = max(0, min(255, alpha[y * width + x - 1] + alpha[(y - 1) * width + x] - alpha[(y - 1) * width + x - 1]))
-                filtered.append((alpha[y * width + x] - prediction) % 256)
-        raw = riff([chunk(b'VP8X', bytes([16, 0, 0, 0]) + (width - 1).to_bytes(3, 'little') + (height - 1).to_bytes(3, 'little')), chunk(b'ALPH', bytes([filter_id << 2]) + bytes(filtered)), chunk(b'VP8 ', vp8)])
-        save(lib, out, records, f'alpha-filter-{filter_id}.webp', raw, 'Independent procedural ALPH residuals + libwebp color payload; oracle validates filters')
-    (out / 'compressed-alpha.webp').write_bytes(encode(lib, width, height, True))
+                residuals.append((alpha[y * width + x] - prediction) % 256)
+        raw = bytes(c for green in residuals for c in (0, green, 0, 255))
+        compressed = payload(lossless(lib, raw, width, height), b'VP8L')[5:]
+        data = riff([chunk(b'VP8X', bytes([16, 0, 0, 0]) + (width - 1).to_bytes(3, 'little') + (height - 1).to_bytes(3, 'little')), chunk(b'ALPH', bytes([1 | (filter_id << 2)]) + compressed), chunk(b'VP8 ', vp8)])
+        save(lib, out, records, f'compressed-alpha-filter-{filter_id}.webp', data, 'Independently generated green-channel residuals; VP8L header omitted per ALPH specification; libwebp oracle validates complete container')
+    # Independently specified one-symbol trees encode hidden RGB exactly. No image
+    # encoder may canonicalize transparent RGB before this decoder regression.
+    bits = Bits()
+    bits.put(0, 1)
+    bits.put(0, 1)
+    bits.put(0, 1)
+    for value in [57, 19, 91, 0, 0]:
+        bits.put(1, 1)
+        bits.put(0, 1)
+        bits.put(1, 1)
+        bits.put(value, 8)
+    vp8l = bytes([0x2f]) + struct.pack('<I', 1 << 28) + bits.bytes()
+    save(lib, out, records, 'hidden-rgb.webp', riff([chunk(b'VP8L', vp8l)]), 'Specification-built one-symbol Huffman trees: RGBA=(19,57,91,0), libwebp independently validates hidden RGB')
+    for width, height in [(16384, 1), (1, 16384)]:
+        header = bytes([0x2f]) + struct.pack('<I', (width - 1) | ((height - 1) << 14) | (1 << 28))
+        save(lib, out, records, f'lossless-boundary-{width}x{height}.webp', riff([chunk(b'VP8L', header + bits.bytes())]), 'Specification-built constant hidden-RGB image at the VP8L 16384-axis boundary; libwebp independently validates')
+    # Duplicate simple symbols are a valid zero-bit singleton. Distinct red
+    # symbols consume the following bits, proving alignment across all four pixels.
+    bits = Bits()
+    bits.put(0, 1)
+    bits.put(0, 1)
+    bits.put(0, 1)
+    for values in [(57, 57), (19, 201), (91,), (255,), (0,)]:
+        bits.put(1, 1)
+        bits.put(len(values) - 1, 1)
+        bits.put(1, 1)
+        bits.put(values[0], 8)
+        if len(values) == 2:
+            bits.put(values[1], 8)
+    for bit in [0, 1, 0, 1]:
+        bits.put(bit, 1)
+    header = bytes([0x2f]) + struct.pack('<I', 3)
+    save(lib, out, records, 'duplicate-simple-alignment.webp', riff([chunk(b'VP8L', header + bits.bytes())]), 'Specification-built permitted duplicate simple symbols; alternating red bits prove zero-bit singleton alignment; independently decoded by libwebp')
     version = hex(lib.WebPGetDecoderVersion())
-    (out / 'provenance.json').write_text(json.dumps({'libwebp_version': version, 'oracle_mode': 'MODE_RGBA, no_fancy_upsampling=1, bypass_filtering=0, dithering=0, alpha_dithering=0', 'fixtures': records}, indent=2) + '\n')
+    (out / 'provenance.json').write_text(json.dumps({'libwebp_version': version, 'oracle_mode': 'MODE_RGBA; no_fancy_upsampling=1 (only affects VP8); filtering on; no dithering', 'fixtures': records}, indent=2) + '\n')
     print(json.dumps({'version': version, 'fixtures': len(records)}))
 
 

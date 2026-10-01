@@ -1,0 +1,35 @@
+{
+  "module": "golang.org/x/image",
+  "version": "v0.38.0",
+  "module_sum": "h1:5l+q+Y9JDC7mBOMjo4/aPhMDcxEptsX+Tt3GgRQRPuE=",
+  "source": "https://cs.opensource.google/go/x/image/+/refs/tags/v0.38.0:vp8l/",
+  "license": "BSD-3-Clause; original LICENSE, PATENTS and per-file notices retained",
+  "maintenance": "tqwebp maintainers must track upstream VP8L security fixes and re-audit allocations, semantics and cancellation before version updates",
+  "adaptation": [
+    "Use bounded byte input with checked explicit dimensions and context; no hidden bufio allocation",
+    "Headerless ALPH mode consumes real lossless stream with externally checked dimensions",
+    "Charge every backing allocation through caller budget before make; no reservation release",
+    "Bound auxiliary depth, transform uniqueness, group minimum encoded length and node traversal",
+    "Add cooperative context checkpoints to entropy, Huffman construction, copy/cache loops and transforms",
+    "Enforce full binary Huffman trees and normative normal singleton length1",
+    "Normalize spec-permitted duplicate simple symbols to zero-bit singleton",
+    "Reject undefined predictor modes when used; preserve exact lossless RGBA"
+  ],
+  "files": [
+    {
+      "file": "decode.go",
+      "upstream_sha256": "32562282d122f806fb8887ac4e158e32c0349c996cbc890371c5c68d644ac7eb",
+      "adapted_sha256": "c5aba5051f810c67d7297a57225f2a535b3c06d1d9066f4d51dff17864f0ca11"
+    },
+    {
+      "file": "huffman.go",
+      "upstream_sha256": "2cbfd295ca97102bb2f6efea9eb125ca36ad428d299160ea08438a02855dcd8a",
+      "adapted_sha256": "81f363ff8fd06b09ae70ccf0a92bd70f6ed17d4c042191c05bacda950454de9e"
+    },
+    {
+      "file": "transform.go",
+      "upstream_sha256": "ffb990b337e40a07f921bfd213b55b205b3973410fdbd2a38eb2581527dafea1",
+      "adapted_sha256": "266af58f041cd7c4e64c77fd6729e8ef92a6757fd9b5bcf59886ac5f32d705c6"
+    }
+  ]
+}
