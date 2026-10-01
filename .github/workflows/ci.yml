@@ -56,6 +56,7 @@ jobs:
         run: |
           go test . -run '^$' -fuzz '^FuzzEncodeAPI$' -fuzztime=10s
           go test ./internal/encoder -run '^$' -fuzz '^FuzzEncode$' -fuzztime=10s
+          go test ./container -run '^$' -fuzz '^FuzzDemux$' -fuzztime=10s
 
       - name: Module graph stays pure (stdlib, golang.org/x, turboquant only)
         run: |
