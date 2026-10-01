@@ -44,6 +44,9 @@ jobs:
             exit 1
           fi
 
+      - name: Offline decoder fixture generator tests
+        run: python3 -m unittest discover -s tools -p test_generate_decode_fixtures.py
+
       - name: Test (oracle self-tests + baseline golden regeneration-check)
         run: go test -count=1 ./...
 
