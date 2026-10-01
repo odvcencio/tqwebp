@@ -2,6 +2,7 @@ package webp
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"image"
 	"image/color"
@@ -163,8 +164,24 @@ func FuzzEncodeAPI(f *testing.F) {
 			}
 		}
 		options := &Options{Quality: int(q % 102), Method: int(method % 8)}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		preCancelled := method&64 != 0
+		if preCancelled {
+			cancel()
+		}
+		outputCap := int64(1 << 20)
+		if method&16 != 0 {
+			outputCap = int64(q) + 1
+		}
 		var out bytes.Buffer
-		err := EncodeWithLimits(&out, m, options, Limits{MaxPixels: 1024, MaxOutputBytes: 1 << 20})
+		err := EncodeContext(ctx, &out, m, options, Limits{MaxPixels: 1024, MaxOutputBytes: outputCap})
+		if preCancelled {
+			if err != context.Canceled || out.Len() != 0 {
+				t.Fatalf("pre-cancelled: %v, %d output bytes", err, out.Len())
+			}
+			return
+		}
 		if options.Quality > 100 || options.Method > 6 {
 			if !errors.Is(err, ErrInvalidOptions) {
 				t.Fatalf("options: %v", err)
@@ -181,6 +198,16 @@ func FuzzEncodeAPI(f *testing.F) {
 			return
 		}
 		if err != nil {
+			if errors.Is(err, ErrOutputTooLarge) {
+				var full bytes.Buffer
+				if fullErr := Encode(&full, m, options); fullErr != nil {
+					t.Fatal(fullErr)
+				}
+				if !errors.Is(err, ErrLimitExceeded) || out.Len() != 0 || int64(full.Len()) <= outputCap {
+					t.Fatalf("incorrect output refusal: %v, cap=%d size=%d wrote=%d", err, outputCap, full.Len(), out.Len())
+				}
+				return
+			}
 			t.Fatal(err)
 		}
 		decoded, err := decoder.Decode(bytes.NewReader(out.Bytes()))

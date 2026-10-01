@@ -122,6 +122,9 @@ func (e *encoder) refineBlockLevels(ctx int, levels *[16]int16, dist spatialDist
 }
 
 func (e *encoder) refineBlockLevelsWithProbs(ctx int, levels *[16]int16, dist spatialDistortionFn, probs *token.Probs) ([16]int16, coeffSearchStats) {
+	if !e.check() {
+		return *levels, coeffSearchStats{}
+	}
 	retained := *levels
 	lambda := e.coefficientLambda()
 	winner, stats := searchCoeffCandidatesWithProbs(token.YWithDC, ctx, 0, probs, levels, lambda, dist)
@@ -131,6 +134,9 @@ func (e *encoder) refineBlockLevelsWithProbs(ctx int, levels *[16]int16, dist sp
 		e.rd.CoeffBlocksChanged++
 	}
 	if e.coeffTrellisAllowed() {
+		if !e.check() {
+			return *levels, stats
+		}
 		s5b := winner
 		final, tstats := runCoeffTrellisWithProbs(trellisWholeScan, token.YWithDC, ctx, &retained,
 			lambda, dist, probs, retained, s5b)

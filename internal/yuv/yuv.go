@@ -34,6 +34,7 @@
 package yuv
 
 import (
+	"context"
 	"image"
 	"image/color"
 )
@@ -147,7 +148,21 @@ func clamp8(v int32) uint8 {
 // alpha channel; callers reject non-opaque images before they call it
 // (see IsOpaque).
 func Convert(m image.Image) *Planes {
+	p, _ := ConvertContext(context.Background(), m)
+	return p
+}
+
+// ConvertContext is Convert with cooperative checkpoints. Caller validation
+// establishes valid bounds/storage before entry; arbitrary image methods are
+// not made interruptible by this context.
+func ConvertContext(ctx context.Context, m image.Image) (*Planes, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	b := m.Bounds()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	p := NewPlanes(b.Dx(), b.Dy())
 	src := newSampler(m)
 
@@ -157,9 +172,17 @@ func Convert(m image.Image) *Planes {
 	// the chroma sample. Padded positions repeat the nearest edge pixel,
 	// which the sampler does through its clamp.
 	for cy := 0; cy < p.MBH*8; cy++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		yrow := p.Y[2*cy*p.YStride:]
 		yrow2 := p.Y[(2*cy+1)*p.YStride:]
 		for cx := 0; cx < p.CStride; cx++ {
+			if cx&63 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
 			var sr, sg, sb int32
 			for dy := 0; dy < 2; dy++ {
 				for dx := 0; dx < 2; dx++ {
@@ -179,7 +202,62 @@ func Convert(m image.Image) *Planes {
 			p.V[i] = boxToV(sr, sg, sb)
 		}
 	}
-	return p
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// IsOpaqueContext checks cancellable traversals of standard image types.
+// Custom Opaque methods keep their existing semantics and may block; check
+// cancellation again once such a callback returns. A background context keeps
+// the original fast path unchanged.
+func IsOpaqueContext(ctx context.Context, m image.Image) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if ctx.Done() == nil {
+		return IsOpaque(m), ctx.Err()
+	}
+	switch m.(type) {
+	case *image.Paletted:
+		// image.Paletted.Opaque checks the entire palette, even entries no
+		// visible pixel uses. Preserve that conservative legacy behavior.
+		for _, c := range m.(*image.Paletted).Palette {
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+			if _, _, _, a := c.RGBA(); a != 0xffff {
+				return false, ctx.Err()
+			}
+		}
+		return true, ctx.Err()
+	case *image.RGBA, *image.NRGBA, *image.RGBA64, *image.NRGBA64,
+		*image.Alpha, *image.Alpha16, *image.NYCbCrA:
+		// Traverse instead of entering a potentially long standard Opaque
+		// scan, so cancellation can be observed between bounded batches.
+	case *image.Gray, *image.Gray16, *image.YCbCr, *image.CMYK:
+		return true, ctx.Err()
+	default:
+		if o, ok := m.(interface{ Opaque() bool }); ok {
+			opaque := o.Opaque()
+			return opaque, ctx.Err()
+		}
+	}
+	b := m.Bounds()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if (x-b.Min.X)&63 == 0 {
+				if err := ctx.Err(); err != nil {
+					return false, err
+				}
+			}
+			if _, _, _, a := m.At(x, y).RGBA(); a != 0xffff {
+				return false, ctx.Err()
+			}
+		}
+	}
+	return true, ctx.Err()
 }
 
 // IsOpaque reports whether every pixel of m is fully opaque. It uses the

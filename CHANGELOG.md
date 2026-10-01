@@ -3,6 +3,15 @@
 
 ## Unreleased
 
+- Add `EncodeContext` for cooperative cancellation without changing existing
+  `Options`, `Limits`, defaults or encoder decisions. Preserve preflight error
+  precedence; a pre-cancelled context touches no image/writer callbacks.
+- Add typed `LimitError` details while retaining both output-limit sentinel
+  matches. Bound serialized partition buffers for positive output caps and
+  commit capped output only after validation.
+- Freeze positional consumer compatibility and 27 efac282e corpus outputs;
+  add deterministic cancellation, partition capacity and cap boundary tests.
+
 - Separate Method 6 coefficient-refinement weighting from prediction-mode
   weighting, correcting the real-image quality collapse. Methods below 6
   keep their encoded bytes. Add generated and real-corpus quality guards.

@@ -37,7 +37,7 @@
 // caller-specified limit; negative fields return ErrInvalidLimits. Bounds
 // and the visible pixel count are checked before Opaque or At is called and
 // before padded planes are allocated. The complete file is serialized in a
-// private buffer before MaxOutputBytes is checked, so a refusal for that
+// bounded private buffers before output is committed, so a refusal for that
 // limit never writes a partial file. Encode remains the backwards-compatible
 // unconstrained entry point.
 //
@@ -53,7 +53,7 @@
 package webp
 
 import (
-	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -107,6 +107,9 @@ var (
 	// ErrInvalidImage reports a nil image or empty or inverted bounds.
 	ErrInvalidImage = errors.New("tqwebp: invalid image")
 
+	// ErrInvalidContext reports a nil context, including a typed nil.
+	ErrInvalidContext = errors.New("tqwebp: invalid context")
+
 	// ErrInvalidWriter reports a nil output writer.
 	ErrInvalidWriter = errors.New("tqwebp: invalid writer")
 
@@ -146,7 +149,7 @@ var (
 // and a short write returns io.ErrShortWrite. See EncodeWithLimits for
 // resource bounds. Image implementations must provide valid pixel storage.
 func Encode(w io.Writer, m image.Image, o *Options) error {
-	return EncodeWithLimits(w, m, o, Limits{})
+	return EncodeContext(context.Background(), w, m, o, Limits{})
 }
 
 // EncodeWithLimits writes m in the lossy WebP format subject to limits. A
@@ -155,11 +158,32 @@ func Encode(w io.Writer, m image.Image, o *Options) error {
 //
 // Bounds and the visible pixel count are checked before the encoder calls
 // Opaque or At and before it allocates padded image planes. The complete
-// WebP file is serialized into a private buffer before MaxOutputBytes is
-// checked, so an output-cap refusal never writes a partial file to w.
+// WebP file is serialized under MaxOutputBytes before output is committed,
+// so an output-cap refusal never writes a partial file to w.
 // MaxOutputBytes is not a memory cap. Writer failures can leave partial
 // output; errors are returned unchanged and short writes return io.ErrShortWrite.
 func EncodeWithLimits(w io.Writer, m image.Image, o *Options, limits Limits) error {
+	return EncodeContext(context.Background(), w, m, o, limits)
+}
+
+// EncodeContext writes m as lossy WebP subject to limits and cooperative
+// cancellation. A nil context returns ErrInvalidContext. A pre-cancelled
+// context returns ctx.Err before any image or writer method is called.
+// Otherwise validation follows EncodeWithLimits: options, limits, writer,
+// image, bounds, caller dimensions/pixels, format dimensions, then opacity.
+//
+// Cancellation is checked during traversal, analysis and serialization and
+// before external writes. It cannot interrupt an arbitrary image method or
+// writer that blocks; supply deadline-aware I/O for that case. Once a write
+// starts, cancellation or I/O failure may leave partial output. An output-cap
+// refusal writes nothing. MaxOutputBytes is neither a CPU nor a memory cap.
+func EncodeContext(ctx context.Context, w io.Writer, m image.Image, o *Options, limits Limits) error {
+	if nilInterface(ctx) {
+		return ErrInvalidContext
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	cfg, err := configFor(o)
 	if err != nil {
 		return err
@@ -183,42 +207,52 @@ func EncodeWithLimits(w io.Writer, m image.Image, o *Options, limits Limits) err
 	width := uint64(b.Max.X) - uint64(b.Min.X)
 	height := uint64(b.Max.Y) - uint64(b.Min.Y)
 	if limits.MaxWidth > 0 && width > uint64(limits.MaxWidth) {
-		return fmt.Errorf("%w: width %d exceeds MaxWidth %d", ErrLimitExceeded, width, limits.MaxWidth)
+		return &LimitError{Resource: "width", Limit: int64(limits.MaxWidth), Actual: limitActual(width, 1)}
 	}
 	if limits.MaxHeight > 0 && height > uint64(limits.MaxHeight) {
-		return fmt.Errorf("%w: height %d exceeds MaxHeight %d", ErrLimitExceeded, height, limits.MaxHeight)
+		return &LimitError{Resource: "height", Limit: int64(limits.MaxHeight), Actual: limitActual(height, 1)}
 	}
 	if limits.MaxPixels > 0 && width > uint64(limits.MaxPixels)/height {
-		return fmt.Errorf("%w: image has more than MaxPixels %d pixels", ErrLimitExceeded, limits.MaxPixels)
+		return &LimitError{Resource: "pixels", Limit: limits.MaxPixels, Actual: limitActual(width, height)}
 	}
 	if width > frame.MaxDimension || height > frame.MaxDimension {
 		return ErrTooLarge
 	}
 
-	if !yuv.IsOpaque(m) {
-		return ErrAlphaUnsupported
-	}
-
-	if limits.MaxOutputBytes == 0 {
-		return encoder.Encode(w, m, cfg)
-	}
-
-	var encoded bytes.Buffer
-	if err := encoder.Encode(&encoded, m, cfg); err != nil {
-		return err
-	}
-	if limits.MaxOutputBytes > 0 && int64(encoded.Len()) > limits.MaxOutputBytes {
-		return fmt.Errorf("%w: %d bytes exceeds MaxOutputBytes %d: %w", ErrOutputTooLarge, encoded.Len(), limits.MaxOutputBytes, ErrLimitExceeded)
-	}
-	data := encoded.Bytes()
-	n, err := w.Write(data)
+	opaque, err := yuv.IsOpaqueContext(ctx, m)
 	if err != nil {
 		return err
 	}
-	if n != len(data) {
-		return io.ErrShortWrite
+	if !opaque {
+		return ErrAlphaUnsupported
 	}
-	return nil
+	// An external writer may return any error, including one matching an
+	// internal limit type. Never translate a writer error into our own refusal.
+	target := w
+	tracked := writerErrorTracker{writer: w}
+	if limits.MaxOutputBytes > 0 {
+		target = &tracked
+	}
+	err = encoder.EncodeContext(ctx, target, m, cfg, limits.MaxOutputBytes)
+	if limits.MaxOutputBytes == 0 || tracked.err != nil {
+		return err
+	}
+	var capError *encoder.OutputLimitError
+	if errors.As(err, &capError) {
+		return &LimitError{Resource: "output_bytes", Limit: capError.Limit, Actual: capError.Actual}
+	}
+	return err
+}
+
+type writerErrorTracker struct {
+	writer io.Writer
+	err    error
+}
+
+func (w *writerErrorTracker) Write(p []byte) (int, error) {
+	n, err := w.writer.Write(p)
+	w.err = err
+	return n, err
 }
 
 func validateLimits(limits Limits) error {

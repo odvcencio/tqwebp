@@ -32,6 +32,11 @@
 // below 1<<8 and each write adds less than 1<<8.
 package boolenc
 
+import "errors"
+
+// ErrOutputLimit reports exhaustion of a bounded serialized partition.
+var ErrOutputLimit = errors.New("tqwebp/boolenc: output limit exceeded")
+
 // Encoder writes binary decisions as a VP8 boolean-coded byte stream.
 // Create one with New, write decisions with WriteBool and its helpers,
 // then call Finish exactly once to get the bytes.
@@ -41,6 +46,9 @@ type Encoder struct {
 	bottom   uint32 // low end of the coding interval
 	bitCount int    // shifts left before the next byte leaves bottom
 	finished bool
+	bounded  bool
+	limit    int
+	err      error
 }
 
 // New returns an Encoder that writes into a fresh buffer. Argument hint
@@ -53,6 +61,45 @@ func New(hint int) *Encoder {
 	return &Encoder{out: out, rng: 255, bottom: 0, bitCount: 24}
 }
 
+// NewBounded limits backing capacity and byte count to maxBytes, including
+// Finish's flush. Zero permits no bytes. Once exhausted, writes are inert and
+// Err reports ErrOutputLimit; callers must not use that incomplete stream.
+func NewBounded(hint, maxBytes int) *Encoder {
+	if maxBytes < 0 {
+		panic("tqwebp/boolenc: negative output limit")
+	}
+	if hint > maxBytes {
+		hint = maxBytes
+	}
+	e := New(hint)
+	e.bounded, e.limit = true, maxBytes
+	return e
+}
+
+// Err reports a bounded output failure, or nil for a complete stream.
+func (e *Encoder) Err() error { return e.err }
+
+func (e *Encoder) appendByte(v byte) {
+	if !e.bounded {
+		e.out = append(e.out, v)
+		return
+	}
+	if len(e.out) == e.limit {
+		e.err = ErrOutputLimit
+		return
+	}
+	if len(e.out) == cap(e.out) {
+		capacity := cap(e.out)*2 + 1
+		if capacity < cap(e.out) || capacity > e.limit {
+			capacity = e.limit
+		}
+		out := make([]byte, len(e.out), capacity)
+		copy(out, e.out)
+		e.out = out
+	}
+	e.out = append(e.out, v)
+}
+
 // Len reports how many bytes the encoder has written so far. The count
 // excludes the bytes that Finish flushes out of the accumulator.
 func (e *Encoder) Len() int { return len(e.out) }
@@ -61,6 +108,9 @@ func (e *Encoder) Len() int { return len(e.out) }
 // that bit is false, on a scale of 256. WriteBool panics when prob is 0,
 // because a zero probability makes the stream undecodable.
 func (e *Encoder) WriteBool(prob uint8, bit bool) {
+	if e.err != nil {
+		return
+	}
 	if prob == 0 {
 		panic("tqwebp/boolenc: probability 0 is not codable")
 	}
@@ -79,7 +129,10 @@ func (e *Encoder) WriteBool(prob uint8, bit bool) {
 		e.bottom <<= 1
 		e.bitCount--
 		if e.bitCount == 0 {
-			e.out = append(e.out, byte(e.bottom>>24))
+			e.appendByte(byte(e.bottom >> 24))
+			if e.err != nil {
+				return
+			}
 			e.bottom &= 1<<24 - 1
 			e.bitCount = 8
 		}
@@ -133,6 +186,9 @@ func (e *Encoder) Finish() []byte {
 		panic("tqwebp/boolenc: Finish called twice")
 	}
 	e.finished = true
+	if e.err != nil {
+		return e.out
+	}
 
 	c := uint(e.bitCount)
 	v := e.bottom
@@ -143,7 +199,10 @@ func (e *Encoder) Finish() []byte {
 	// included, and moves the next byte to be written into bits 31 to 24.
 	v <<= c
 	for i := 0; i < 4; i++ {
-		e.out = append(e.out, byte(v>>24))
+		e.appendByte(byte(v >> 24))
+		if e.err != nil {
+			break
+		}
 		v <<= 8
 	}
 	return e.out
