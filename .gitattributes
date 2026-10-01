@@ -6,3 +6,6 @@ internal/vp8decode/upstream-adaptation.patch -whitespace
 testdata/lossless/*.rgba binary
 testdata/lossless/*.webp binary
 internal/vp8ldecode/upstream-adaptation.patch -whitespace
+# Animation oracle pixels and compressed images are binary fixtures.
+testdata/animation/**/*.rgba binary
+testdata/animation/**/*.webp binary
