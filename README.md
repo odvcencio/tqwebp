@@ -23,6 +23,10 @@ to a consumer module. See the changelog for unreleased changes.
 | Decoding | Not provided; use an independent WebP decoder |
 | Determinism | Integer coding, fixed search order; repeated encodes and GOMAXPROCS tests check identical bytes |
 
+Animation, ICC/EXIF/XMP metadata and complete VP8/VP8L decoding remain required
+toolkit milestones. This branch is still an opaque lossy encoder. See the
+[API compatibility contract](docs/api.md) for the supported foundation.
+
 Inputs must satisfy the `image.Image` contract, including valid pixel storage.
 Quality 100 remains lossy, including chroma subsampling. Use a lossless codec
 when exact pixels or small colored text matter.
@@ -79,7 +83,9 @@ Zero limit fields mean no caller limit; negative fields return
 reading pixels or allocating padded planes. Choose a pixel limit appropriate
 to your deployment: `Encode` alone permits very large, expensive images.
 
-`MaxOutputBytes` limits the complete file **after serialization**. It is not
+`MaxOutputBytes` limits the complete file, including RIFF framing and padding.
+Positive caps bound the serialized partition buffers and stop serialization
+when the cap cannot be met, before writing anything to the caller. It is not
 a memory or CPU cap. The encoder holds padded source/reconstruction planes,
 macroblock records, and encoded data; method 6 runs a second analysis pass.
 An output-cap refusal writes nothing and matches both `ErrOutputTooLarge`
@@ -93,6 +99,27 @@ Unsupported alpha and input/limit validation fail before any output writes.
 Writer errors are returned unchanged, and short writes return
 `io.ErrShortWrite`. A writer failure can leave a partial destination file;
 write to a temporary file and rename after success when atomic output matters.
+
+For cancellation, use the same options and limits with `EncodeContext`:
+
+```go
+ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
+defer cancel()
+err := webp.EncodeContext(ctx, w, img, nil, limits)
+```
+
+A nil context returns `ErrInvalidContext`; a pre-cancelled context returns
+`ctx.Err()` before image/writer callbacks. Cancellation is cooperative during
+traversal, analysis, both method 6 passes and serialization. It cannot interrupt
+a blocking custom image method or `Write`; the caller must supply I/O deadlines
+or process supervision for a hard whole-job deadline. Cancellation after an
+external write starts can leave partial output.
+
+Limit refusals expose `*LimitError` through `errors.As`, with `Resource`, `Limit`
+and `Actual`. `Actual == -1` means the full amount was unavailable safely, such
+as when bounded serialization stopped early. `errors.Is` behavior stays the
+same; output refusals match both limit sentinels. Negative limits remain invalid,
+and the established `Options` and `Limits` fields/defaults are unchanged.
 
 ## Measured quality and size
 

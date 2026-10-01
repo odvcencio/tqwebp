@@ -8,6 +8,7 @@
 package encoder
 
 import (
+	"context"
 	"image"
 	"io"
 
@@ -72,13 +73,16 @@ type macroblock struct {
 
 // encoder holds one frame's state.
 type encoder struct {
-	cfg Config
-	src *yuv.Planes
-	rec *yuv.Planes
-	q   quantize.Quantizer
-	mbw int
-	mbh int
-	mbs []macroblock
+	cfg            Config
+	ctx            context.Context
+	err            error
+	maxOutputBytes int64
+	src            *yuv.Planes
+	rec            *yuv.Planes
+	q              quantize.Quantizer
+	mbw            int
+	mbh            int
+	mbs            []macroblock
 
 	// filterLevel is the loop filter strength the frame header signals.
 	// It stays at 0 in this release: the encoder does not model the
@@ -228,7 +232,17 @@ func (e *encoder) resetAnalysis() {
 	fresh.rdCoeffOptOff = e.rdCoeffOptOff
 	fresh.rdCoeffTrellisOff = e.rdCoeffTrellisOff
 	fresh.rdProbOptOff = e.rdProbOptOff
+	fresh.ctx, fresh.err, fresh.maxOutputBytes = e.ctx, e.err, e.maxOutputBytes
 	*e = *fresh
+}
+
+// check records cancellation without changing codec decisions. Existing
+// internal test callers with no context retain their original behavior.
+func (e *encoder) check() bool {
+	if e.err == nil && e.ctx != nil {
+		e.err = e.ctx.Err()
+	}
+	return e.err == nil
 }
 
 // run analyses and reconstructs every macroblock, in the raster order a
@@ -237,6 +251,9 @@ func (e *encoder) resetAnalysis() {
 func (e *encoder) run() {
 	for mby := 0; mby < e.mbh; mby++ {
 		for mbx := 0; mbx < e.mbw; mbx++ {
+			if !e.check() {
+				return
+			}
 			e.encodeMacroblock(mbx, mby)
 		}
 	}
@@ -259,10 +276,16 @@ func (e *encoder) run() {
 // re-ran under it. Below the boundary nothing is recorded.
 func (e *encoder) runFrame() {
 	e.run()
+	if !e.check() {
+		return
+	}
 	if e.cfg.Method < minProbOptMethod {
 		return
 	}
 	frozen := e.optimizeTokenProbs()
+	if !e.check() {
+		return
+	}
 	e.probOptimizationDone = true
 	e.probDerivations = 1
 	if frozen == nil {
@@ -272,6 +295,9 @@ func (e *encoder) runFrame() {
 	e.rateProbs = frozen
 	e.resetAnalysis()
 	e.run()
+	if !e.check() {
+		return
+	}
 	e.probOptimizationDone = true
 	e.probDerivations = 1
 	e.frozenTokenProbs = frozen
@@ -611,11 +637,27 @@ func (e *encoder) writeFile(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	return container.WriteSimpleLossy(w, payload)
+	ctx := e.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return container.WriteSimpleLossyContext(ctx, w, payload)
 }
 
 // frameBytes serializes the analysed frame into a VP8 key frame.
 func (e *encoder) frameBytes() ([]byte, error) {
+	if !e.check() {
+		return nil, e.err
+	}
+	// A complete simple file is 20 RIFF/chunk bytes plus a 10-byte VP8
+	// prefix, the partitions, and padding. WebP file lengths are even.
+	budget := int64(-1)
+	if e.maxOutputBytes > 0 {
+		if e.maxOutputBytes < 30 {
+			return nil, e.outputLimitError()
+		}
+		budget = (e.maxOutputBytes-20)&^1 - 10
+	}
 	skipProb := e.skipProbability()
 
 	// Slice 6A: at Method 6 the token probabilities are measured from
@@ -634,7 +676,10 @@ func (e *encoder) frameBytes() ([]byte, error) {
 		tokenProbs = e.optimizeTokenProbs()
 	}
 
-	first := boolenc.New(1024 + len(e.mbs)*2)
+	if !e.check() {
+		return nil, e.err
+	}
+	first := partitionEncoder(1024+len(e.mbs)*2, budget)
 	frame.WriteHeader(first, frame.Header{
 		Width:           e.src.Width,
 		Height:          e.src.Height,
@@ -660,6 +705,12 @@ func (e *encoder) frameBytes() ([]byte, error) {
 	for mby := 0; mby < e.mbh; mby++ {
 		leftSub = [4]predict.SubMode{}
 		for mbx := 0; mbx < e.mbw; mbx++ {
+			if !e.check() {
+				return nil, e.err
+			}
+			if first.Err() != nil {
+				return nil, e.outputLimitError()
+			}
 			mb := &e.mbs[mby*e.mbw+mbx]
 			aboveSub := &e.subCtxAbove[mbx]
 			first.WriteBool(skipProb, mb.skip)
@@ -680,8 +731,36 @@ func (e *encoder) frameBytes() ([]byte, error) {
 		}
 	}
 
-	tokens := e.writeTokens(tokenProbs)
-	return frame.Assemble(e.src.Width, e.src.Height, first.Finish(), tokens)
+	firstBytes := first.Finish()
+	if first.Err() != nil {
+		return nil, e.outputLimitError()
+	}
+	if budget >= 0 {
+		budget -= int64(len(firstBytes))
+	}
+	tokens, err := e.writeTokensBounded(tokenProbs, budget)
+	if err != nil {
+		return nil, err
+	}
+	if !e.check() {
+		return nil, e.err
+	}
+	return frame.Assemble(e.src.Width, e.src.Height, firstBytes, tokens)
+}
+
+func (e *encoder) outputLimitError() error {
+	return &OutputLimitError{Limit: e.maxOutputBytes, Actual: -1}
+}
+
+func partitionEncoder(hint int, budget int64) *boolenc.Encoder {
+	if budget < 0 {
+		return boolenc.New(hint)
+	}
+	maxInt := int64(int(^uint(0) >> 1))
+	if budget > maxInt {
+		budget = maxInt
+	}
+	return boolenc.NewBounded(hint, int(budget))
 }
 
 // skipProbability returns the probability that a macroblock carries
@@ -690,6 +769,9 @@ func (e *encoder) frameBytes() ([]byte, error) {
 func (e *encoder) skipProbability() uint8 {
 	coded := 0
 	for i := range e.mbs {
+		if i&255 == 0 && !e.check() {
+			return 1
+		}
 		if !e.mbs[i].skip {
 			coded++
 		}

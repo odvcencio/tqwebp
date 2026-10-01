@@ -12,6 +12,7 @@
 package container
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -25,6 +26,12 @@ const MaxPayload = 1<<32 - 1 - 13
 // WriteSimpleLossy writes payload, a VP8 key frame, to w inside a RIFF
 // WebP container.
 func WriteSimpleLossy(w io.Writer, payload []byte) error {
+	return WriteSimpleLossyContext(context.Background(), w, payload)
+}
+
+// WriteSimpleLossyContext is WriteSimpleLossy with checkpoints before writes.
+// It cannot interrupt a blocking Writer.Write; the caller owns I/O deadlines.
+func WriteSimpleLossyContext(ctx context.Context, w io.Writer, payload []byte) error {
 	if len(payload) > MaxPayload {
 		return fmt.Errorf("tqwebp: VP8 payload of %d bytes does not fit a RIFF container", len(payload))
 	}
@@ -36,14 +43,14 @@ func WriteSimpleLossy(w io.Writer, payload []byte) error {
 	copy(header[12:16], "VP8 ")
 	binary.LittleEndian.PutUint32(header[16:20], uint32(len(payload)))
 
-	if err := write(w, header[:]); err != nil {
+	if err := writeContext(ctx, w, header[:]); err != nil {
 		return err
 	}
-	if err := write(w, payload); err != nil {
+	if err := writeContext(ctx, w, payload); err != nil {
 		return err
 	}
 	if pad == 1 {
-		if err := write(w, []byte{0}); err != nil {
+		if err := writeContext(ctx, w, []byte{0}); err != nil {
 			return err
 		}
 	}
@@ -57,6 +64,13 @@ func Size(payloadLen int) int {
 }
 
 func write(w io.Writer, p []byte) error {
+	return writeContext(context.Background(), w, p)
+}
+
+func writeContext(ctx context.Context, w io.Writer, p []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	n, err := w.Write(p)
 	if err != nil {
 		return err
@@ -64,5 +78,5 @@ func write(w io.Writer, p []byte) error {
 	if n != len(p) {
 		return io.ErrShortWrite
 	}
-	return nil
+	return ctx.Err()
 }

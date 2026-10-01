@@ -386,6 +386,9 @@ func (e *encoder) rdChooseLuma(mbx, mby int, mb *macroblock) {
 	var bestCoding rdCoding
 	haveBest := false
 	for m := predict.Mode(0); m < predict.NumModes; m++ {
+		if !e.check() {
+			return
+		}
 		predict.Predict(e.predY[:], 16, 16, m, nb)
 		cand, coding := e.rdEvalWhole(mbx, mby, m, src, &tok, chromaEmpty)
 		e.rd.CandidatesEvaluated++
@@ -396,7 +399,13 @@ func (e *encoder) rdChooseLuma(mbx, mby int, mb *macroblock) {
 	}
 
 	// Stage B: the B_PRED candidate behind its pruning gate.
+	if !e.check() {
+		return
+	}
 	e.rdTryBPred(mbx, mby, mb, &best, &tok, chromaEmpty)
+	if !e.check() {
+		return
+	}
 
 	// Commit the winner and hand the exact post-macroblock context
 	// state to the next macroblock's pricing.
@@ -670,6 +679,9 @@ func (e *encoder) rdWalkBPred(mbx, mby int, best *rdCandidate, tok *rdTokenView,
 
 	for b := 0; b < 16; b++ {
 		bx, by := x0+(b%4)*4, y0+(b/4)*4
+		if !e.check() {
+			return rdCandidate{}, subModes, lumaLevels, false
+		}
 		predict.GatherSubNeighbors(&nb, e.rec.Y, e.rec.YStride, bx, by, paddedWidth)
 		srcRow0 := e.src.Y[by*e.src.YStride+bx:]
 

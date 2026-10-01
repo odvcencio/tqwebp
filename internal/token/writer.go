@@ -30,6 +30,9 @@ func NewWriter(enc *boolenc.Encoder, probs *Probs) *Writer {
 	return &Writer{enc: enc, probs: probs}
 }
 
+// Err reports exhaustion of the underlying bounded partition.
+func (w *Writer) Err() error { return w.enc.Err() }
+
 // SetObserver attaches obs to w, replacing any earlier observer. A nil
 // obs detaches the current one. Observation is passive: it never changes
 // what WriteBlock codes.

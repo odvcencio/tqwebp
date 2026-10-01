@@ -1,6 +1,7 @@
 package encoder
 
 import (
+	"errors"
 	"m31labs.dev/tqwebp/internal/boolenc"
 	"m31labs.dev/tqwebp/internal/cost"
 	"m31labs.dev/tqwebp/internal/predict"
@@ -95,13 +96,25 @@ type mbContext struct {
 // header signalled, nil meaning the defaults -- and returns the finished
 // partition.
 func (e *encoder) writeTokens(probs *token.Probs) []byte {
+	data, _ := e.writeTokensBounded(probs, -1)
+	return data
+}
+
+func (e *encoder) writeTokensBounded(probs *token.Probs, budget int64) ([]byte, error) {
 	if probs == nil {
 		probs = &token.DefaultProbs
 	}
-	enc := boolenc.New(4096 + len(e.mbs)*16)
+	enc := partitionEncoder(4096+len(e.mbs)*16, budget)
 	w := token.NewWriter(enc, probs)
 	e.codeTokens(w)
-	return enc.Finish()
+	data := enc.Finish()
+	if errors.Is(e.err, boolenc.ErrOutputLimit) || enc.Err() != nil {
+		return nil, e.outputLimitError()
+	}
+	if !e.check() {
+		return nil, e.err
+	}
+	return data, nil
 }
 
 // optimizeTokenProbs runs the Slice 6A dry histogram pass: it walks the
@@ -121,6 +134,9 @@ func (e *encoder) optimizeTokenProbs() *token.Probs {
 	hist := &cost.Histogram{}
 	w.SetObserver(hist)
 	e.codeTokens(w)
+	if !e.check() {
+		return nil
+	}
 	return hist.Optimize(&token.DefaultProbs)
 }
 
@@ -134,6 +150,13 @@ func (e *encoder) codeTokens(w *token.Writer) {
 	for mby := 0; mby < e.mbh; mby++ {
 		left = mbContext{}
 		for mbx := 0; mbx < e.mbw; mbx++ {
+			if !e.check() {
+				return
+			}
+			if err := w.Err(); err != nil {
+				e.err = err
+				return
+			}
 			mb := &e.mbs[mby*e.mbw+mbx]
 			up := &above[mbx]
 
