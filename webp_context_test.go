@@ -38,7 +38,7 @@ func TestEncodeContextValidationPrecedence(t *testing.T) {
 		{"height before pixels", context.Background(), io.Discard, panicImage{image.Rect(0, 0, 1, 2)}, nil, Limits{MaxHeight: 1, MaxPixels: 1}, ErrLimitExceeded},
 		{"pixels before format", context.Background(), io.Discard, panicImage{image.Rect(0, 0, 16384, 1)}, nil, Limits{MaxPixels: 1}, ErrLimitExceeded},
 		{"format before alpha", context.Background(), io.Discard, panicImage{image.Rect(0, 0, 16384, 1)}, nil, Limits{}, ErrTooLarge},
-		{"alpha before output", context.Background(), io.Discard, alpha, nil, Limits{MaxOutputBytes: 1}, ErrAlphaUnsupported},
+		{"alpha output refusal", context.Background(), io.Discard, alpha, nil, Limits{MaxOutputBytes: 1}, ErrOutputTooLarge},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -199,8 +199,8 @@ func TestContextPaletteKeepsLegacyOpaqueSemantics(t *testing.T) {
 	m := image.NewPaletted(image.Rect(0, 0, 1, 1), color.Palette{color.Black, color.Transparent})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := EncodeContext(ctx, io.Discard, m, nil, Limits{}); err != ErrAlphaUnsupported {
-		t.Fatalf("unused translucent palette was accepted: %v", err)
+	if err := EncodeContext(ctx, io.Discard, m, nil, Limits{}); err != nil {
+		t.Fatalf("palette failed transparent-capable encode: %v", err)
 	}
 }
 

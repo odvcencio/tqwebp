@@ -1,0 +1,46 @@
+{
+  "libwebp": "0x10500",
+  "oracle": "WebPAnimDecoder MODE_RGBA for animation; no-fancy libwebp RGBA for stills; neutral-chroma samples",
+  "frames": [
+    {
+      "file": "alpha-odd-00.oracle.rgba",
+      "sha256": "c8ca26f339ca28147b87713d5c8271183f682ccbbcbc63188bdd24ec9ae21a0d",
+      "timestamp_ms": 0
+    },
+    {
+      "file": "alpha-tiny-00.oracle.rgba",
+      "sha256": "c54cbdfc9d42732456e062f47329734a3da1f6ad5c78b2c0dcc60b28e3216578",
+      "timestamp_ms": 0
+    },
+    {
+      "file": "opaque-still-00.oracle.rgba",
+      "sha256": "2887c3eeb13a9f0e8db5f09ea843502b08c1b879e5ec9647e7f7c70d55f3b2b3",
+      "timestamp_ms": 0
+    },
+    {
+      "file": "replace-holes-00.oracle.rgba",
+      "sha256": "264c18cc12f8ff0e593632c411b7f6fab4052dcf2b655eebf025c2af0306b198",
+      "timestamp_ms": 0
+    },
+    {
+      "file": "replace-holes-01.oracle.rgba",
+      "sha256": "9eef3a87d446c6f758770abd12a44f6347c913edc29fdb34f1841905ecf31501",
+      "timestamp_ms": 17
+    },
+    {
+      "file": "replace-holes-02.oracle.rgba",
+      "sha256": "83befa5154bb8341b585c23e897e10e8f4b4ecbff0c6a3f0642eb7630ca9288f",
+      "timestamp_ms": 18
+    },
+    {
+      "file": "replace-holes-03.oracle.rgba",
+      "sha256": "127a797cea271debe1074132db61ef2393d2177ed0395c657afbed6612ed36e0",
+      "timestamp_ms": 51
+    },
+    {
+      "file": "one-frame-alpha-00.oracle.rgba",
+      "sha256": "9ab69cacd2772d250efa0bed95f4ed75f9679a408717dd26fc3f07a95f32acca",
+      "timestamp_ms": 0
+    }
+  ]
+}

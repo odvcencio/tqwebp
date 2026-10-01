@@ -9,3 +9,6 @@ internal/vp8ldecode/upstream-adaptation.patch -whitespace
 # Animation oracle pixels and compressed images are binary fixtures.
 testdata/animation/**/*.rgba binary
 testdata/animation/**/*.webp binary
+# Public encoder oracle pixels and compressed output are also binary fixtures.
+testdata/encode-alpha/**/*.rgba binary
+testdata/encode-alpha/**/*.webp binary

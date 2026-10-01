@@ -65,8 +65,8 @@ func TestErrors(t *testing.T) {
 			m.Pix[i] = 0xff
 		}
 		m.Set(3, 3, color.NRGBA{R: 1, G: 2, B: 3, A: 128})
-		if err := Encode(&bytes.Buffer{}, m, nil); err != ErrAlphaUnsupported {
-			t.Errorf("error is %v, want ErrAlphaUnsupported", err)
+		if err := Encode(&bytes.Buffer{}, m, nil); err != nil {
+			t.Errorf("transparent supported-input expansion failed: %v", err)
 		}
 	})
 

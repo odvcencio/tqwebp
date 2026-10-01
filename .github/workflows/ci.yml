@@ -53,6 +53,9 @@ jobs:
       - name: Offline animation fixture generator tests
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p test_generate_animation_fixtures.py
 
+      - name: Offline encode fixture verifier tests
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p test_verify_encode_fixtures.py
+
       - name: Test (oracle self-tests + baseline golden regeneration-check)
         run: go test -count=1 ./...
 
@@ -64,6 +67,7 @@ jobs:
           GOMAXPROCS: "2"
         run: |
           go test . -run '^$' -fuzz '^FuzzEncodeAPI$' -fuzztime=10s
+          go test . -run '^$' -fuzz '^FuzzEncodeDocument$' -fuzztime=10s
           go test ./internal/encoder -run '^$' -fuzz '^FuzzEncode$' -fuzztime=10s
           go test ./container -run '^$' -fuzz '^FuzzDemux$' -fuzztime=10s
           go test . -run '^$' -fuzz '^FuzzReadAnimation$' -fuzztime=10s
