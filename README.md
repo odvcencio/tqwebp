@@ -28,7 +28,8 @@ to a consumer module. See the changelog for unreleased changes.
 Reader/DecodeAll compose animations; EncodeAll writes full-canvas replacement
 frames with exact timing and selected metadata. Transparent still encoding uses
 raw alpha, while decoding accepts both codec families and raw/compressed alpha.
-CLI workflows and full decoder/browser qualification remain required. See the
+The [CLI](docs/cli.md) covers conversion, animation manifests, inspection, extraction
+and metadata remux. Full decoder/browser/release qualification remains required. See the
 [API compatibility contract](docs/api.md) for the supported foundation.
 
 Inputs must satisfy the `image.Image` contract, including valid pixel storage.
@@ -198,7 +199,7 @@ conversion constants retain the notice under [third_party](third_party/libwebp-C
 The separate [`container` package](docs/container.md) supports bounded still/animated-WebP
 inspection and ICC/EXIF/XMP edits without recompressing payloads. It is structural
 transport, not pixel decoding. Root native VP8/VP8L still decoding is now
-available, including [Reader/DecodeAll composition](docs/animation.md); CLI and full qualification remain required work. The existing opaque encoder bytes and defaults are unchanged.
+available, including [Reader/DecodeAll composition](docs/animation.md); CLI workflows are available; full qualification remains required work. The existing opaque encoder bytes and defaults are unchanged.
 
 ## Intermediate still decoding
 
@@ -215,3 +216,20 @@ VP8L and compressed alpha use an allocation-budgeted native adaptation; see
 ## Transparent and animated encoding
 
 The familiar Encode call now preserves transparent input using native VP8 plus raw ALPH. Use EncodeAll for full-canvas animation and explicitly selected metadata. See [pixel, ownership and output contracts](docs/encoding-alpha-animation.md), including the opaque-only migration recipe.
+
+## Everyday command
+
+Build with `go build ./cmd/tqwebp` from this candidate. Examples:
+
+```sh
+tqwebp input.png -o output.webp --quality 82
+tqwebp inspect animated.webp --validate --json
+tqwebp decode animated.webp --out-dir frames
+tqwebp encode frames/manifest.json -o rebuilt.webp
+tqwebp metadata input.webp -o private.webp --strip exif,xmp
+```
+
+The default preserves transparent pixels and all WebP animation frames, retains
+associated RGB profile bytes without color conversion, and strips EXIF/XMP.
+See [safe outputs, limits, metadata/orientation policy and command reference](docs/cli.md).
+CLI availability in this candidate is not a release-tag installation claim.
