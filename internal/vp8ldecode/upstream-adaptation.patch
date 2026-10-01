@@ -1,0 +1,625 @@
+--- upstream/vp8l/decode.go
++++ internal/vp8ldecode/decode.go
+@@ -6,13 +6,13 @@
+ //
+ // The VP8L specification is at:
+ // https://developers.google.com/speed/webp/docs/riff_container
+-package vp8l // import "golang.org/x/image/vp8l"
++package vp8l
+ 
+ import (
+-	"bufio"
++	"bytes"
++	"context"
+ 	"errors"
+ 	"image"
+-	"image/color"
+ 	"io"
+ )
+ 
+@@ -58,13 +58,20 @@
+ 
+ // decoder holds the bit-stream for a VP8L image.
+ type decoder struct {
+-	r     io.ByteReader
+-	bits  uint32
+-	nBits uint32
++	ctx            context.Context
++	reserve        func(int64) error
++	depth          int
++	transformsSeen [4]bool
++	r              *bytes.Reader
++	bits           uint32
++	nBits          uint32
+ }
+ 
+ // read reads the next n bits from the decoder's bit-stream.
+ func (d *decoder) read(n uint32) (uint32, error) {
++	if err := d.ctx.Err(); err != nil {
++		return 0, err
++	}
+ 	for d.nBits < n {
+ 		c, err := d.r.ReadByte()
+ 		if err != nil {
+@@ -91,6 +98,10 @@
+ 	if err != nil {
+ 		return transform{}, 0, err
+ 	}
++	if d.transformsSeen[t.transformType] {
++		return transform{}, 0, errors.New("vp8l: repeated transform")
++	}
++	d.transformsSeen[t.transformType] = true
+ 	switch t.transformType {
+ 	case transformTypePredictor, transformTypeCrossColor:
+ 		t.bits, err = d.read(3)
+@@ -155,7 +166,7 @@
+ // encoded via a Huffman tree, specified in section 5.2.2.
+ func (d *decoder) decodeCodeLengths(dst []uint32, codeLengthCodeLengths []uint32) error {
+ 	h := hTree{}
+-	if err := h.build(codeLengthCodeLengths); err != nil {
++	if err := h.build(d, codeLengthCodeLengths); err != nil {
+ 		return err
+ 	}
+ 
+@@ -252,7 +263,7 @@
+ 				return err
+ 			}
+ 		}
+-		return h.buildSimple(nSymbols, symbols, alphabetSize)
++		return h.buildSimple(d, nSymbols, symbols, alphabetSize)
+ 	}
+ 
+ 	nCodes, err := d.read(4)
+@@ -270,11 +281,14 @@
+ 			return err
+ 		}
+ 	}
++	if err := d.charge(4 * int64(alphabetSize)); err != nil {
++		return err
++	}
+ 	codeLengths := make([]uint32, alphabetSize)
+ 	if err = d.decodeCodeLengths(codeLengths, codeLengthCodeLengths[:]); err != nil {
+ 		return err
+ 	}
+-	return h.build(codeLengths)
++	return h.build(d, codeLengths)
+ }
+ 
+ const (
+@@ -313,12 +327,28 @@
+ 				return nil, nil, 0, err
+ 			}
+ 			for p := 0; p < len(hPix); p += 4 {
++				if p&4095 == 0 {
++					if err := d.ctx.Err(); err != nil {
++						return nil, nil, 0, err
++					}
++				}
+ 				i := int(hPix[p])<<8 | int(hPix[p+1])
+ 				if maxHGroupIndex < i {
+ 					maxHGroupIndex = i
+ 				}
+ 			}
+ 		}
++	}
++	if maxHGroupIndex > 65535 {
++		return nil, nil, 0, errInvalidHuffmanTree
++	}
++	// Five trees per group require at least four bits each, including a
++	// single-symbol simple tree. Reject impossible table counts before allocation.
++	if int64(maxHGroupIndex+1)*20 > int64(d.r.Len())*8+int64(d.nBits) {
++		return nil, nil, 0, io.ErrUnexpectedEOF
++	}
++	if err := d.charge(2680 * int64(maxHGroupIndex+1)); err != nil {
++		return nil, nil, 0, err
+ 	}
+ 	hGroups = make([]hGroup, maxHGroupIndex+1)
+ 	for i := range hGroups {
+@@ -350,6 +380,11 @@
+ 
+ // decodePix decodes pixel data, specified in section 5.2.2.
+ func (d *decoder) decodePix(w int32, h int32, minCap int32, topLevel bool) ([]byte, error) {
++	d.depth++
++	defer func() { d.depth-- }()
++	if d.depth > 2 || w < 1 || h < 1 || w > 16384 || h > 16384 {
++		return nil, errors.New("vp8l: invalid auxiliary dimensions or depth")
++	}
+ 	// Decode the color cache parameters.
+ 	ccBits, ccShift, ccEntries := uint32(0), uint32(0), ([]uint32)(nil)
+ 	useColorCache, err := d.read(1)
+@@ -365,6 +400,9 @@
+ 			return nil, errors.New("vp8l: invalid color cache parameters")
+ 		}
+ 		ccShift = 32 - ccBits
++		if err := d.charge(4 << ccBits); err != nil {
++			return nil, err
++		}
+ 		ccEntries = make([]uint32, 1<<ccBits)
+ 	}
+ 
+@@ -381,12 +419,18 @@
+ 	// Decode the pixels.
+ 	if minCap < 4*w*h {
+ 		minCap = 4 * w * h
++	}
++	if err := d.charge(int64(minCap)); err != nil {
++		return nil, err
+ 	}
+ 	pix := make([]byte, 4*w*h, minCap)
+ 	p, cachedP := 0, 0
+ 	x, y := int32(0), int32(0)
+ 	hg, lookupHG := &hGroups[0], hMask != 0
+ 	for p < len(pix) {
++		if err := d.ctx.Err(); err != nil {
++			return nil, err
++		}
+ 		if lookupHG {
+ 			i := 4 * (tilesPerRow*(y>>hBits) + (x >> hBits))
+ 			hg = &hGroups[uint32(hPix[i])<<8|uint32(hPix[i+1])]
+@@ -445,6 +489,11 @@
+ 				return nil, errors.New("vp8l: invalid LZ77 parameters")
+ 			}
+ 			for ; p < pEnd; p, q = p+1, q+1 {
++				if p&4095 == 0 {
++					if err := d.ctx.Err(); err != nil {
++						return nil, err
++					}
++				}
+ 				pix[p] = pix[q]
+ 			}
+ 
+@@ -459,6 +508,11 @@
+ 			// into the cache. Note that VP8L assumes ARGB order, but the
+ 			// Go image.RGBA type is in RGBA order.
+ 			for ; cachedP < p; cachedP += 4 {
++				if cachedP&4095 == 0 {
++					if err := d.ctx.Err(); err != nil {
++						return nil, err
++					}
++				}
+ 				argb := uint32(pix[cachedP+0])<<16 |
+ 					uint32(pix[cachedP+1])<<8 |
+ 					uint32(pix[cachedP+2])<<0 |
+@@ -502,62 +556,63 @@
+ }
+ 
+ // decodeHeader decodes the VP8L header from r.
+-func decodeHeader(r io.Reader) (d *decoder, w int32, h int32, err error) {
+-	rr, ok := r.(io.ByteReader)
+-	if !ok {
+-		rr = bufio.NewReader(r)
+-	}
+-	d = &decoder{r: rr}
++func (d *decoder) decodeHeader() (w int32, h int32, err error) {
+ 	magic, err := d.read(8)
+ 	if err != nil {
+-		return nil, 0, 0, err
++		return 0, 0, err
+ 	}
+ 	if magic != 0x2f {
+-		return nil, 0, 0, errors.New("vp8l: invalid header")
++		return 0, 0, errors.New("vp8l: invalid header")
+ 	}
+ 	width, err := d.read(14)
+ 	if err != nil {
+-		return nil, 0, 0, err
++		return 0, 0, err
+ 	}
+ 	width++
+ 	height, err := d.read(14)
+ 	if err != nil {
+-		return nil, 0, 0, err
++		return 0, 0, err
+ 	}
+ 	height++
+ 	_, err = d.read(1) // Read and ignore the hasAlpha hint.
+ 	if err != nil {
+-		return nil, 0, 0, err
++		return 0, 0, err
+ 	}
+ 	version, err := d.read(3)
+ 	if err != nil {
+-		return nil, 0, 0, err
++		return 0, 0, err
+ 	}
+ 	if version != 0 {
+-		return nil, 0, 0, errors.New("vp8l: invalid version")
+-	}
+-	return d, int32(width), int32(height), nil
+-}
+-
+-// DecodeConfig decodes the color model and dimensions of a VP8L image from r.
+-func DecodeConfig(r io.Reader) (image.Config, error) {
+-	_, w, h, err := decodeHeader(r)
+-	if err != nil {
+-		return image.Config{}, err
+-	}
+-	return image.Config{
+-		ColorModel: color.NRGBAModel,
+-		Width:      int(w),
+-		Height:     int(h),
+-	}, nil
+-}
+-
+-// Decode decodes a VP8L image from r.
+-func Decode(r io.Reader) (image.Image, error) {
+-	d, w, h, err := decodeHeader(r)
+-	if err != nil {
++		return 0, 0, errors.New("vp8l: invalid version")
++	}
++	return int32(width), int32(height), nil
++}
++
++// Decode decodes a dimension-checked VP8L payload. Headerless is used only
++// for ALPH: container dimensions replace the omitted five-byte VP8L header.
++// reserve is called before every backing allocation and must reject excess.
++func Decode(ctx context.Context, data []byte, width, height int, headerless bool, reserve func(int64) error) (*image.NRGBA, error) {
++	if ctx == nil || reserve == nil {
++		return nil, errors.New("vp8l: invalid decode contract")
++	}
++	if err := ctx.Err(); err != nil {
+ 		return nil, err
+ 	}
++	if width < 1 || height < 1 || width > 16384 || height > 16384 {
++		return nil, errors.New("vp8l: invalid dimensions")
++	}
++	d := &decoder{r: bytes.NewReader(data), ctx: ctx, reserve: reserve}
++	w, h := int32(width), int32(height)
++	if !headerless {
++		dw, dh, err := d.decodeHeader()
++		if err != nil {
++			return nil, err
++		}
++		if dw != w || dh != h {
++			return nil, errors.New("vp8l: dimension mismatch")
++		}
++	}
++	var err error
+ 	// Decode the transforms.
+ 	var (
+ 		nTransforms    int
+@@ -593,7 +648,13 @@
+ 	// Apply the inverse transformations.
+ 	for i := nTransforms - 1; i >= 0; i-- {
+ 		t := &transforms[i]
+-		pix = inverseTransforms[t.transformType](t, pix, h)
++		pix, err = inverseTransforms[t.transformType](d, t, pix, h)
++		if err != nil {
++			return nil, err
++		}
++	}
++	if err := ctx.Err(); err != nil {
++		return nil, err
+ 	}
+ 	return &image.NRGBA{
+ 		Pix:    pix,
+@@ -601,3 +662,15 @@
+ 		Rect:   image.Rect(0, 0, int(originalW), int(h)),
+ 	}, nil
+ }
++
++// charge deliberately never releases a reservation. This upper-bounds live
++// backing storage even across temporary arrays and avoids a false liveness claim.
++func (d *decoder) charge(n int64) error {
++	if err := d.ctx.Err(); err != nil {
++		return err
++	}
++	if n < 0 || n > int64(int(^uint(0)>>1)) {
++		return errors.New("vp8l: allocation size overflow")
++	}
++	return d.reserve(n)
++}
+--- upstream/vp8l/huffman.go
++++ internal/vp8ldecode/huffman.go
+@@ -79,7 +79,7 @@
+ 	n := uint32(0)
+ 	for jump := lutSize; codeLength > 0; {
+ 		codeLength--
+-		if int(n) > len(h.nodes) {
++		if int(n) >= len(h.nodes) {
+ 			return errInvalidHuffmanTree
+ 		}
+ 		switch h.nodes[n].children {
+@@ -100,6 +100,9 @@
+ 		}
+ 	}
+ 
++	if int(n) >= len(h.nodes) {
++		return errInvalidHuffmanTree
++	}
+ 	switch h.nodes[n].children {
+ 	case leafNode:
+ 		// No-op.
+@@ -115,7 +118,7 @@
+ 
+ // codeLengthsToCodes returns the canonical Huffman codes implied by the
+ // sequence of code lengths.
+-func codeLengthsToCodes(codeLengths []uint32) ([]uint32, error) {
++func codeLengthsToCodes(d *decoder, codeLengths []uint32) ([]uint32, error) {
+ 	maxCodeLength := uint32(0)
+ 	for _, cl := range codeLengths {
+ 		if maxCodeLength < cl {
+@@ -135,8 +138,16 @@
+ 		currCode = (currCode + histogram[cl-1]) << 1
+ 		nextCodes[cl] = currCode
+ 	}
++	if err := d.charge(4 * int64(len(codeLengths))); err != nil {
++		return nil, err
++	}
+ 	codes := make([]uint32, len(codeLengths))
+ 	for symbol, cl := range codeLengths {
++		if symbol&255 == 0 {
++			if err := d.ctx.Err(); err != nil {
++				return nil, err
++			}
++		}
+ 		if cl > 0 {
+ 			codes[symbol] = nextCodes[cl]
+ 			nextCodes[cl]++
+@@ -146,10 +157,18 @@
+ }
+ 
+ // build builds a canonical Huffman tree from the given code lengths.
+-func (h *hTree) build(codeLengths []uint32) error {
++func (h *hTree) build(d *decoder, codeLengths []uint32) error {
+ 	// Calculate the number of symbols.
+ 	var nSymbols, lastSymbol uint32
+ 	for symbol, cl := range codeLengths {
++		if symbol&255 == 0 {
++			if err := d.ctx.Err(); err != nil {
++				return err
++			}
++		}
++		if cl > 15 {
++			return errInvalidHuffmanTree
++		}
+ 		if cl != 0 {
+ 			nSymbols++
+ 			lastSymbol = uint32(symbol)
+@@ -157,6 +176,13 @@
+ 	}
+ 	if nSymbols == 0 {
+ 		return errInvalidHuffmanTree
++	}
++	// A normal-code singleton is represented by one length-1 symbol.
++	if nSymbols == 1 && codeLengths[lastSymbol] != 1 {
++		return errInvalidHuffmanTree
++	}
++	if err := d.charge(8 * int64(2*nSymbols-1)); err != nil {
++		return err
+ 	}
+ 	h.nodes = make([]hNode, 1, 2*nSymbols-1)
+ 	// Handle the trivial case.
+@@ -167,22 +193,46 @@
+ 		return h.insert(lastSymbol, 0, 0)
+ 	}
+ 	// Handle the non-trivial case.
+-	codes, err := codeLengthsToCodes(codeLengths)
++	codes, err := codeLengthsToCodes(d, codeLengths)
+ 	if err != nil {
+ 		return err
+ 	}
+ 	for symbol, cl := range codeLengths {
++		if symbol&255 == 0 {
++			if err := d.ctx.Err(); err != nil {
++				return err
++			}
++		}
+ 		if cl > 0 {
+ 			if err := h.insert(uint32(symbol), codes[symbol], cl); err != nil {
+ 				return err
+ 			}
+ 		}
+ 	}
++	if len(h.nodes) != cap(h.nodes) {
++		return errInvalidHuffmanTree
++	}
++	for _, n := range h.nodes {
++		if n.children == 0 {
++			return errInvalidHuffmanTree
++		}
++	}
+ 	return nil
+ }
+ 
+ // buildSimple builds a Huffman tree with 1 or 2 symbols.
+-func (h *hTree) buildSimple(nSymbols uint32, symbols [2]uint32, alphabetSize uint32) error {
++func (h *hTree) buildSimple(d *decoder, nSymbols uint32, symbols [2]uint32, alphabetSize uint32) error {
++	if nSymbols < 1 || nSymbols > 2 {
++		return errInvalidHuffmanTree
++	}
++	// Duplicate simple symbols are explicitly allowed and form a zero-bit
++	// singleton; retaining a two-leaf tree would consume spurious pixel bits.
++	if nSymbols == 2 && symbols[0] == symbols[1] {
++		nSymbols = 1
++	}
++	if err := d.charge(8 * int64(2*nSymbols-1)); err != nil {
++		return err
++	}
+ 	h.nodes = make([]hNode, 1, 2*nSymbols-1)
+ 	for i := uint32(0); i < nSymbols; i++ {
+ 		if symbols[i] >= alphabetSize {
+@@ -197,6 +247,9 @@
+ 
+ // next returns the next Huffman-encoded symbol from the bit-stream d.
+ func (h *hTree) next(d *decoder) (uint32, error) {
++	if err := d.ctx.Err(); err != nil {
++		return 0, err
++	}
+ 	var n uint32
+ 	// Read enough bits so that we can use the look-up table.
+ 	if d.nBits < lutSize {
+@@ -225,7 +278,16 @@
+ 	d.nBits -= lutSize
+ 
+ slowPath:
+-	for h.nodes[n].children != leafNode {
++	for {
++		if int(n) >= len(h.nodes) {
++			return 0, errInvalidHuffmanTree
++		}
++		if h.nodes[n].children == leafNode {
++			break
++		}
++		if h.nodes[n].children <= 0 {
++			return 0, errInvalidHuffmanTree
++		}
+ 		if d.nBits == 0 {
+ 			c, err := d.r.ReadByte()
+ 			if err != nil {
+--- upstream/vp8l/transform.go
++++ internal/vp8ldecode/transform.go
+@@ -3,6 +3,8 @@
+ // license that can be found in the LICENSE file.
+ 
+ package vp8l
++
++import "errors"
+ 
+ // This file deals with image transforms, specified in section 3.
+ 
+@@ -39,16 +41,19 @@
+ 	pix []byte
+ }
+ 
+-var inverseTransforms = [nTransformTypes]func(*transform, []byte, int32) []byte{
++var inverseTransforms = [nTransformTypes]func(*decoder, *transform, []byte, int32) ([]byte, error){
+ 	transformTypePredictor:     inversePredictor,
+ 	transformTypeCrossColor:    inverseCrossColor,
+ 	transformTypeSubtractGreen: inverseSubtractGreen,
+ 	transformTypeColorIndexing: inverseColorIndexing,
+ }
+ 
+-func inversePredictor(t *transform, pix []byte, h int32) []byte {
++func inversePredictor(dec *decoder, t *transform, pix []byte, h int32) ([]byte, error) {
++	if err := dec.ctx.Err(); err != nil {
++		return nil, err
++	}
+ 	if t.oldWidth == 0 || h == 0 {
+-		return pix
++		return pix, nil
+ 	}
+ 	// The first pixel's predictor is mode 0 (opaque black).
+ 	pix[3] += 0xff
+@@ -63,6 +68,9 @@
+ 	}
+ 	top, tilesPerRow := 0, nTiles(t.oldWidth, t.bits)
+ 	for y := int32(1); y < h; y++ {
++		if err := dec.ctx.Err(); err != nil {
++			return nil, err
++		}
+ 		// The first column's predictor is mode 2 (T).
+ 		pix[p+0] += pix[top+0]
+ 		pix[p+1] += pix[top+1]
+@@ -77,6 +85,9 @@
+ 			if x&mask == 0 {
+ 				predictorMode = t.pix[q+1] & 0x0f
+ 				q += 4
++			}
++			if predictorMode > 13 {
++				return nil, errors.New("vp8l: invalid predictor mode")
+ 			}
+ 			switch predictorMode {
+ 			case 0: // Opaque black.
+@@ -184,13 +195,19 @@
+ 			p, top = p+4, top+4
+ 		}
+ 	}
+-	return pix
+-}
+-
+-func inverseCrossColor(t *transform, pix []byte, h int32) []byte {
++	return pix, nil
++}
++
++func inverseCrossColor(dec *decoder, t *transform, pix []byte, h int32) ([]byte, error) {
++	if err := dec.ctx.Err(); err != nil {
++		return nil, err
++	}
+ 	var greenToRed, greenToBlue, redToBlue int32
+ 	p, mask, tilesPerRow := int32(0), int32(1)<<t.bits-1, nTiles(t.oldWidth, t.bits)
+ 	for y := int32(0); y < h; y++ {
++		if err := dec.ctx.Err(); err != nil {
++			return nil, err
++		}
+ 		q := 4 * (y >> t.bits) * tilesPerRow
+ 		for x := int32(0); x < t.oldWidth; x++ {
+ 			if x&mask == 0 {
+@@ -210,28 +227,44 @@
+ 			p += 4
+ 		}
+ 	}
+-	return pix
+-}
+-
+-func inverseSubtractGreen(t *transform, pix []byte, h int32) []byte {
++	return pix, nil
++}
++
++func inverseSubtractGreen(dec *decoder, t *transform, pix []byte, h int32) ([]byte, error) {
++	if err := dec.ctx.Err(); err != nil {
++		return nil, err
++	}
+ 	for p := 0; p < len(pix); p += 4 {
++		if p&4095 == 0 {
++			if err := dec.ctx.Err(); err != nil {
++				return nil, err
++			}
++		}
+ 		green := pix[p+1]
+ 		pix[p+0] += green
+ 		pix[p+2] += green
+ 	}
+-	return pix
+-}
+-
+-func inverseColorIndexing(t *transform, pix []byte, h int32) []byte {
++	return pix, nil
++}
++
++func inverseColorIndexing(dec *decoder, t *transform, pix []byte, h int32) ([]byte, error) {
++	if err := dec.ctx.Err(); err != nil {
++		return nil, err
++	}
+ 	if t.bits == 0 {
+ 		for p := 0; p < len(pix); p += 4 {
++			if p&4095 == 0 {
++				if err := dec.ctx.Err(); err != nil {
++					return nil, err
++				}
++			}
+ 			i := 4 * uint32(pix[p+1])
+ 			pix[p+0] = t.pix[i+0]
+ 			pix[p+1] = t.pix[i+1]
+ 			pix[p+2] = t.pix[i+2]
+ 			pix[p+3] = t.pix[i+3]
+ 		}
+-		return pix
++		return pix, nil
+ 	}
+ 
+ 	vMask, xMask, bitsPerPixel := uint32(0), int32(0), uint32(8>>t.bits)
+@@ -244,8 +277,14 @@
+ 		vMask, xMask = 0x01, 0x07
+ 	}
+ 
++	if err := dec.charge(4 * int64(t.oldWidth) * int64(h)); err != nil {
++		return nil, err
++	}
+ 	d, p, v, dst := 0, 0, uint32(0), make([]byte, 4*t.oldWidth*h)
+ 	for y := int32(0); y < h; y++ {
++		if err := dec.ctx.Err(); err != nil {
++			return nil, err
++		}
+ 		for x := int32(0); x < t.oldWidth; x++ {
+ 			if x&xMask == 0 {
+ 				v = uint32(pix[p+1])
+@@ -262,7 +301,7 @@
+ 			v >>= bitsPerPixel
+ 		}
+ 	}
+-	return dst
++	return dst, nil
+ }
+ 
+ func abs(x int32) int32 {

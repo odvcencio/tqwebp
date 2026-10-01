@@ -12,8 +12,8 @@ func ExampleDecode() {
 		panic(err)
 	}
 	defer f.Close()
-	// Real still pixels, with nearest chroma and no ICC transform. VP8L,
-	// compressed ALPH and animation are explicitly rejected in this candidate.
+	// Real still pixels, with nearest chroma and no ICC transform.
+	// VP8L and compressed ALPH are supported; animation remains rejected.
 	img, err := webp.Decode(f)
 	if err != nil {
 		panic(err)
@@ -27,8 +27,8 @@ func ExampleDecodeConfig() {
 		panic(err)
 	}
 	defer f.Close()
-	// Config inspection can succeed for VP8L although Decode cannot yet decode
-	// its pixels. Header success is never proof of complete-file validity.
+	// VP8L config inspection is not entropy decoding. Header success is never
+	// proof of complete-file validity; Decode must still succeed.
 	config, err := webp.DecodeConfig(f)
 	if err != nil {
 		panic(err)

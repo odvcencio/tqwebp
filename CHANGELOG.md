@@ -3,6 +3,16 @@
 
 ## Unreleased
 
+- Add native VP8L and compressed-ALPH still decoding through narrowly adapted
+  x/image v0.38.0 code, with every entropy/table/transform allocation admitted
+  under the existing working budget and cooperative CPU cancellation.
+- Preserve exact lossless RGBA and hidden RGB; correctly decode headerless
+  ALPH green residuals before unfiltering. Twenty-three new libwebp oracle fixtures
+  and allocation-site/error-category regressions qualify this still slice.
+- Animation, transparent encoding, document/reader APIs and full release
+  qualification remain required work.
+
+
 - Intermediate P5/P6 decoding slice: Decode, DecodeContext, DecodeConfig and
   explicit register package. Native VP8 still pixels and raw ALPH filters;
   conservative ReadLimits and per-macroblock cancellation adaptation.
@@ -10,8 +20,9 @@
   not a new codec or foreign-runtime wrapper. Independently qualified against
   libwebp 1.5.0 no-fancy RGBA fixtures. Nearest chroma deliberately differs from
   libwebp default fancy upsampling.
-- VP8L, compressed ALPH, animation, transparent encoding and full browser/security
-  qualification remain required. Config inspection is not pixel support.
+- At the preceding VP8-only milestone, VP8L and compressed ALPH were still
+  missing; the above adaptation closes those pixel gaps. Animation, transparent
+  encoding and full browser/security qualification remain required.
 
 
 - Add an experimental public still `container` Demux/Mux foundation with bounded

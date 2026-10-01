@@ -1,0 +1,190 @@
+{
+  "libwebp_version": "0x10500",
+  "oracle_mode": "MODE_RGBA; no_fancy_upsampling=1 (only affects VP8); filtering on; no dithering",
+  "fixtures": [
+    {
+      "file": "blue-purple-pink-large.lossless.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/blue-purple-pink-large.lossless.webp",
+      "width": 600,
+      "height": 400,
+      "sha256": "aab70084a99bb14afdf5c0eb9c414cbb530e0ab6fc7530550bd84e104726d8f6",
+      "rgba_sha256": "755caa4f5152b11731a6d3fa0055a5de6cbfd10f8c2f246271e286daa121704a"
+    },
+    {
+      "file": "blue-purple-pink.lossless.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/blue-purple-pink.lossless.webp",
+      "width": 150,
+      "height": 100,
+      "sha256": "6f318d786d3eef23427c65186a089959c36339cd3abb2cb4c839886aa1a8d677",
+      "rgba_sha256": "fbe835d17ea7551b66fe6959441dc065151ed8699134f3b3f07b1d877002c35d"
+    },
+    {
+      "file": "gopher-doc.1bpp.lossless.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/gopher-doc.1bpp.lossless.webp",
+      "width": 75,
+      "height": 100,
+      "sha256": "335348a182a3fc65e0a1a59a53555cdea0c2cd60373acf44b091a0304ff2504a",
+      "rgba_sha256": "a7fbecf021a4572d78566645c8266d92200802d3f699faf9e0d91d87b5c0783b"
+    },
+    {
+      "file": "gopher-doc.2bpp.lossless.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/gopher-doc.2bpp.lossless.webp",
+      "width": 75,
+      "height": 100,
+      "sha256": "5884cb058d20c8099f9fc8e8208df21dd17151bb1257f6f742468e6bfd31ee8f",
+      "rgba_sha256": "49e2d3d681de43bbc2a191fffa71df43a577276c42b982b2e78461665de87b09"
+    },
+    {
+      "file": "gopher-doc.4bpp.lossless.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/gopher-doc.4bpp.lossless.webp",
+      "width": 75,
+      "height": 100,
+      "sha256": "9f1fff55b9b2f960141ed09cddf38a602d233ba2323dfb868ee2adbcd8194a8e",
+      "rgba_sha256": "107db8864c0821e97e555e04d4d9a0307028e9f5751c91dc981ea50690cee7a5"
+    },
+    {
+      "file": "gopher-doc.8bpp.lossless.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/gopher-doc.8bpp.lossless.webp",
+      "width": 75,
+      "height": 100,
+      "sha256": "bed5f6444ddaeee85d498cc6540d48938a7866d771fe0e9470161f9fec7f9a64",
+      "rgba_sha256": "b340f9cb723198af04e5f5a0a3e223854bcd073141aca87187c7073129e534f0"
+    },
+    {
+      "file": "gopher-doc.with-alpha.lossless.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/gopher-doc.with-alpha.lossless.webp",
+      "width": 75,
+      "height": 100,
+      "sha256": "cfa91d75af8ba0cce20bd3ce63227cc5a874e3c19a32eef911c04f05ac983b70",
+      "rgba_sha256": "b357f1bf4765f41ade6803808625e6d23e00b420574bf74c1c03bd21d5828381"
+    },
+    {
+      "file": "tux.lossless.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/tux.lossless.webp",
+      "width": 386,
+      "height": 395,
+      "sha256": "ac071c15ecb7ea9f59cbd4b5185721b4ccfc4b2ee9b6afc3d7b9b44d1f2cea26",
+      "rgba_sha256": "e31a3c5cb0f1695002f580eeb3be5cd499cd45f48b3ee1b066d6817ae3d97a87"
+    },
+    {
+      "file": "yellow_rose.lossless.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/yellow_rose.lossless.webp",
+      "width": 400,
+      "height": 301,
+      "sha256": "d7e1a26bb37f648f0ec33a2aab948ab9857f92b9793b069122f7e3ce4c59ecb5",
+      "rgba_sha256": "fb11de55cbf88f915adc179ec429d8912afbf2ff441b91df9a2d2f17514217f4"
+    },
+    {
+      "file": "yellow_rose.lossy-with-alpha.webp",
+      "source": "golang.org/x/image v0.38.0/testdata/yellow_rose.lossy-with-alpha.webp",
+      "width": 400,
+      "height": 301,
+      "sha256": "b6ddb7ed2f0397f132a975e9c2cdbc3e01abb39096fb1a584cf8c30a0d612378",
+      "rgba_sha256": "4e58537db38521824256e4058e09453c8505feb5f4a870ae9d48c507a6ffad09"
+    },
+    {
+      "file": "lossless-pattern-1x1.webp",
+      "source": "libwebp WebPEncodeLosslessRGBA deterministic RGBA pattern",
+      "width": 1,
+      "height": 1,
+      "sha256": "86be52bdb7547413cafb3ed175a806a798c65de98b40849e0b974c47d187de65",
+      "rgba_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+    },
+    {
+      "file": "lossless-pattern-1x17.webp",
+      "source": "libwebp WebPEncodeLosslessRGBA deterministic RGBA pattern",
+      "width": 1,
+      "height": 17,
+      "sha256": "6bcde12089acfb08497826e5f83076084c733470800f7a87fc6509a93b33c7c5",
+      "rgba_sha256": "e9e19ab6ba445089c5e4c1333d80f73e100078bb6a1ffc1c40416cd25b912630"
+    },
+    {
+      "file": "lossless-pattern-17x1.webp",
+      "source": "libwebp WebPEncodeLosslessRGBA deterministic RGBA pattern",
+      "width": 17,
+      "height": 1,
+      "sha256": "c0b60cd7d89c2273809b0764f3626c5be7616393008490aa7b5acfca7e2f3da0",
+      "rgba_sha256": "bb7fe02952754c22a50e3e6385da32743572a15fa3240460e59d5f431a7c42a2"
+    },
+    {
+      "file": "lossless-pattern-19x17.webp",
+      "source": "libwebp WebPEncodeLosslessRGBA deterministic RGBA pattern",
+      "width": 19,
+      "height": 17,
+      "sha256": "ade24b262da281f312051eb5764a82b0c8993c2534c1d663501d52674164f175",
+      "rgba_sha256": "aedb304f814567fa19ec642489a06bb7aa711870f24a34c00c9a7a2a8ea7ff9b"
+    },
+    {
+      "file": "lossless-pattern-257x33.webp",
+      "source": "libwebp WebPEncodeLosslessRGBA deterministic RGBA pattern",
+      "width": 257,
+      "height": 33,
+      "sha256": "16fd89aba42333315f8d0e00ea29a76e5ead9e47a301cfb2d5c52457cab3490e",
+      "rgba_sha256": "c82c999ef570e46e3fdbbe84e90f4594f1057470bb9a95c113deb4a81d43ff29"
+    },
+    {
+      "file": "compressed-alpha-filter-0.webp",
+      "source": "Independently generated green-channel residuals; VP8L header omitted per ALPH specification; libwebp oracle validates complete container",
+      "width": 19,
+      "height": 17,
+      "sha256": "41b05cd0bbef6f0a7c4b8be69dc5b10b5804466da125cfb4f307f0ecbb874f09",
+      "rgba_sha256": "5eb6fb179a227bfd756443980cac3f89371c62b58828be10e7789a831bb221d2"
+    },
+    {
+      "file": "compressed-alpha-filter-1.webp",
+      "source": "Independently generated green-channel residuals; VP8L header omitted per ALPH specification; libwebp oracle validates complete container",
+      "width": 19,
+      "height": 17,
+      "sha256": "7cfad83e97167e2b917122d9ce9ad94f5e08497545cfcb367260494972b7e8a9",
+      "rgba_sha256": "5eb6fb179a227bfd756443980cac3f89371c62b58828be10e7789a831bb221d2"
+    },
+    {
+      "file": "compressed-alpha-filter-2.webp",
+      "source": "Independently generated green-channel residuals; VP8L header omitted per ALPH specification; libwebp oracle validates complete container",
+      "width": 19,
+      "height": 17,
+      "sha256": "4ac5304aabd0a6948ae9d8eddd10cf184cdc1d2d3e20994498352f9abed6ef36",
+      "rgba_sha256": "5eb6fb179a227bfd756443980cac3f89371c62b58828be10e7789a831bb221d2"
+    },
+    {
+      "file": "compressed-alpha-filter-3.webp",
+      "source": "Independently generated green-channel residuals; VP8L header omitted per ALPH specification; libwebp oracle validates complete container",
+      "width": 19,
+      "height": 17,
+      "sha256": "6afe3390028682f0a9f4603e172554e0ee3009f609eb9d8b2a1aa163865df33b",
+      "rgba_sha256": "5eb6fb179a227bfd756443980cac3f89371c62b58828be10e7789a831bb221d2"
+    },
+    {
+      "file": "hidden-rgb.webp",
+      "source": "Specification-built one-symbol Huffman trees: RGBA=(19,57,91,0), libwebp independently validates hidden RGB",
+      "width": 1,
+      "height": 1,
+      "sha256": "ebe57a8d6867f5c8cc6bfdd96e518a32908b4f611589c02be7fafba086c4c67f",
+      "rgba_sha256": "f154de17219de790ed0ab64fdf4f46921d7f406fe92222aaeca9c02b1707a0d7"
+    },
+    {
+      "file": "lossless-boundary-16384x1.webp",
+      "source": "Specification-built constant hidden-RGB image at the VP8L 16384-axis boundary; libwebp independently validates",
+      "width": 16384,
+      "height": 1,
+      "sha256": "86d7e8708154bcd83dfd2f0f9bf7986fda457a1ff85bc133f6a6c67bc02ee4fb",
+      "rgba_sha256": "6a5b280dd41387faa577cc655f5558c51c0562ecacfdd5588b9daaa7ef26d6cf"
+    },
+    {
+      "file": "lossless-boundary-1x16384.webp",
+      "source": "Specification-built constant hidden-RGB image at the VP8L 16384-axis boundary; libwebp independently validates",
+      "width": 1,
+      "height": 16384,
+      "sha256": "a0778fdae8fb8621664437b1fa890dac72fa06b02d676cf18c9ac39d05cf23db",
+      "rgba_sha256": "6a5b280dd41387faa577cc655f5558c51c0562ecacfdd5588b9daaa7ef26d6cf"
+    },
+    {
+      "file": "duplicate-simple-alignment.webp",
+      "source": "Specification-built permitted duplicate simple symbols; alternating red bits prove zero-bit singleton alignment; independently decoded by libwebp",
+      "width": 4,
+      "height": 1,
+      "sha256": "060675aa5370f876e7a9659eedaebd8a5ee32e811aabaa2cbf346f72bd25be10",
+      "rgba_sha256": "245921c42195c2804f3480681c417f8b86fc4d6fbaade054849584a53227a923"
+    }
+  ]
+}

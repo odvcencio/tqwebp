@@ -1,4 +1,4 @@
-# Intermediate VP8 still decoder (P5/P6 slice)
+# Native still decoding (VP8 foundation plus VP8L/ALPH adaptation)
 
 This candidate adds **real decoded pixels**, not a DecodeConfig forwarding
 alias. Decode and DecodeContext return independently owned `*image.NRGBA` for
@@ -6,10 +6,10 @@ VP8 stills, including extended still containers and uncompressed ALPH with
 none/horizontal/vertical/gradient filters. Metadata is intentionally omitted
 from these pixel-only calls; use container.Demux for byte-preserving metadata.
 
-VP8L, compressed ALPH, composed animation, DecodeAll, Reader, Document and
-transparent encoding are **required remaining work**. Decode returns
-ErrUnsupportedFeature for the first two, ErrAnimatedImage for declared
-animation, and never silently returns frame zero. This is not the complete
+VP8L and compressed ALPH are now supported by the separately audited
+[lossless decoding adaptation](lossless-decoding.md). Composed animation,
+DecodeAll, Reader, Document and transparent encoding are **required remaining
+work**. Decode returns ErrAnimatedImage for declared animation, never frame zero. This is not the complete
 P5/P6 or usability release, and browser qualification remains open.
 
 ## Pixel policy
@@ -38,8 +38,8 @@ unread. Decode validates the full container extent and codec entropy stream.
 
 `DecodeConfig(r)` reads at most 30 bytes, checks the RIFF/header lengths and
 canvas limit, and returns NRGBA dimensions. It does not read full image data or
-validate entropy, metadata or trailing chunks. It can inspect VP8L and animated
-headers even though this candidate cannot decode their pixels. Header success
+validate entropy, metadata or trailing chunks. It can inspect animated headers even though this candidate cannot compose
+their pixels. VP8L header success still requires full entropy decoding. Header success
 must never be treated as decode success or whole-file validation.
 
 Root import has no global image registration. Opt in with:
